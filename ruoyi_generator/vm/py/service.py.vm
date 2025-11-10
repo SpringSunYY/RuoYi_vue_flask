@@ -5,8 +5,8 @@
 
 from typing import List, Tuple
 
-from {{ get_import_path(table.package_name, 'domain') }} import {{ table.class_name }}
-from {{ get_import_path(table.package_name, 'mapper') }}.{{ underscore(table.class_name) }}_mapper import {{ table.class_name }}Mapper
+from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
+from {{ get_import_path(table.package_name, table.module_name, 'mapper') }}.{{ underscore(table.class_name) }}_mapper import {{ table.class_name }}Mapper
 
 class {{ table.class_name }}Service:
     """{{ table.function_name }}服务类"""

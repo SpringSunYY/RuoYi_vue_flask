@@ -44,36 +44,48 @@ class GenUtils:
         # 移除.vm后缀
         base_name = template_file[:-3] if template_file.endswith('.vm') else template_file
         
+        # 确定模块路径：后端代码使用 pythonModelName，前端代码使用 modelName
+        if table.package_name:
+            # 使用 package_name 作为路径（如 com.yy.test -> com/yy/test）
+            module_path = table.package_name.replace('.', '/')
+        else:
+            # 如果 package_name 为空，使用 pythonModelName 作为后端模块名
+            # 注意：这里只用于后端 Python 代码路径，前端代码路径在下面单独处理
+            module_path = GeneratorConfig.python_model_name if hasattr(GeneratorConfig, 'python_model_name') else (table.module_name if table.module_name else 'ruoyi_generator')
+        
         # 根据模板类型生成文件名和路径
         if 'py/entity.py' in template_file:
-            # 根据包名生成目录结构
-            package_path = table.package_name.replace('.', '/') if table.package_name else ''
-            return f"{package_path}/domain/{table.class_name}.py"
+            # Entity文件放在 domain/entity/ 目录下，使用下划线命名法
+            entity_name = to_underscore(table.class_name)
+            return f"{module_path}/domain/entity/{entity_name}.py"
         elif 'py/controller.py' in template_file:
-            package_path = table.package_name.replace('.', '/') if table.package_name else ''
             # 使用下划线命名法
             controller_name = f"{to_underscore(table.class_name)}_controller"
-            return f"{package_path}/controller/{controller_name}.py"
+            return f"{module_path}/controller/{controller_name}.py"
         elif 'py/service.py' in template_file:
-            package_path = table.package_name.replace('.', '/') if table.package_name else ''
             # 使用下划线命名法
             service_name = f"{to_underscore(table.class_name)}_service"
-            return f"{package_path}/service/{service_name}.py"
+            return f"{module_path}/service/{service_name}.py"
         elif 'py/mapper.py' in template_file:
-            package_path = table.package_name.replace('.', '/') if table.package_name else ''
             # 使用下划线命名法
             mapper_name = f"{to_underscore(table.class_name)}_mapper"
-            return f"{package_path}/mapper/{mapper_name}.py"
+            return f"{module_path}/mapper/{mapper_name}.py"
         elif 'py/po.py' in template_file:
-            package_path = table.package_name.replace('.', '/') if table.package_name else ''
-            # PO文件使用表名作为文件名
-            po_name = f"{table.class_name}PO"
-            return f"{package_path}/domain/{po_name}.py"
-        elif 'vue/index.vue' in template_file:
+            # PO文件放在 domain/po/ 目录下，使用下划线命名法
+            po_name = f"{to_underscore(table.class_name)}_po"
+            return f"{module_path}/domain/po/{po_name}.py"
+        elif 'vue/index.vue' in template_file or 'vue/index-tree.vue' in template_file:
             # 无论是树表还是普通表，Vue文件名都是index.vue
-            return f"vue/{table.business_name}/index.vue"
+            # 使用数据库中的 module_name（前端模块名）
+            frontend_module = table.module_name if table.module_name else GeneratorConfig.model_name
+            return f"vue/views/{frontend_module}/{table.business_name}/index.vue"
         elif 'js/api.js' in template_file:
-            return f"js/api/{table.business_name}.js"
+            # 使用数据库中的 module_name（前端模块名）
+            frontend_module = table.module_name if table.module_name else GeneratorConfig.model_name
+            return f"vue/api/{frontend_module}/{table.business_name}.js"
+        elif 'py/__init__.py' in template_file:
+            # 模块根目录的 __init__.py
+            return f"{module_path}/__init__.py"
         elif 'sql/menu.sql' in template_file:
             return f"sql/{table.business_name}_menu.sql"
         elif 'README.md' in template_file:
@@ -144,28 +156,32 @@ class GenUtils:
         return GenUtils.substring_before(clean_table_name, "_") if "_" in clean_table_name else clean_table_name
 
     @staticmethod
-    def get_import_path(package_name: str, module_type: str, class_name: str = None) -> str:
+    def get_import_path(package_name: str, module_name: str, module_type: str, class_name: str = None) -> str:
         """
         生成导入路径
         
         Args:
-            package_name (str): 包名，如 "com.yy.project" 或 "ruoyi_generator"
+            package_name (str): 包名，如 "com.yy.project" 或空字符串
+            module_name (str): 前端模块名（从数据库读取，用于前端代码），但这里应该传入 pythonModelName
             module_type (str): 模块类型，如 "domain", "service", "mapper", "controller"
             class_name (str): 类名（可选，用于PO导入）
             
         Returns:
             str: 导入路径，Python包名保持点分隔格式
         """
+        # Python 后端代码使用 pythonModelName，而不是前端模块名
+        # 如果 package_name 为空，使用 pythonModelName 作为 Python 模块名
         if not package_name:
-            return f"ruoyi_generator.{module_type}"
-        
-        # Python导入路径使用点分隔，保持原样
-        # 例如: "com.yy.project" -> "com.yy.project"
-        # 例如: "ruoyi_generator" -> "ruoyi_generator" (保持不变)
-        python_package = package_name
+            # 使用 pythonModelName 作为 Python 模块名
+            python_package = GeneratorConfig.python_model_name if hasattr(GeneratorConfig, 'python_model_name') else (module_name if module_name else 'ruoyi_generator')
+        else:
+            # Python导入路径使用点分隔，保持原样
+            # 例如: "com.yy.project" -> "com.yy.project"
+            python_package = package_name
         
         # 生成导入路径
         if module_type == "domain" and class_name:
+            # PO 文件在 domain/po/ 目录下
             return f"{python_package}.domain.po"
         elif module_type == "domain":
             return f"{python_package}.domain.entity"
@@ -250,6 +266,29 @@ class GenUtils:
         else:
             table.pk_column = None
         
+        # 从 options 中解析 parentMenuId
+        if table.options:
+            import json
+            try:
+                if isinstance(table.options, str):
+                    options_dict = json.loads(table.options)
+                else:
+                    options_dict = table.options
+                # 从 options 中提取 parentMenuId 并设置到 table
+                if 'parentMenuId' in options_dict:
+                    table.parent_menu_id = options_dict.get('parentMenuId')
+            except Exception as e:
+                print(f"解析 options 字段出错: {e}")
+        
+        # 强制使用前端模块名（modelName），而不是 Python 模块名
+        # module_name 必须使用 modelName（test），不能使用 pythonModelName（ruoyi_test）
+        # 如果 module_name 是空的、等于 python_model_name 或包含 python_model_name，强制替换为 model_name
+        original_module_name = table.module_name
+        if not table.module_name or table.module_name == GeneratorConfig.python_model_name or (table.module_name and GeneratorConfig.python_model_name in table.module_name):
+            table.module_name = GeneratorConfig.model_name
+            if original_module_name != table.module_name:
+                print(f"警告：table.module_name 从 '{original_module_name}' 强制替换为 '{table.module_name}'（前端模块名）")
+        
         # 获取模板目录
         template_dir = os.path.join(os.path.dirname(__file__), 'vm')
         
@@ -273,7 +312,53 @@ class GenUtils:
         # 创建内存中的ZIP文件
         zip_buffer = BytesIO()
         
+        # 确定模块路径，用于生成 __init__.py
+        # 后端 Python 代码使用 pythonModelName，而不是前端模块名
+        if table.package_name:
+            module_path = table.package_name.replace('.', '/')
+        else:
+            # 使用 pythonModelName 作为后端模块路径
+            module_path = GeneratorConfig.python_model_name if hasattr(GeneratorConfig, 'python_model_name') else (table.module_name if table.module_name else 'ruoyi_generator')
+        
+        # 收集需要生成 __init__.py 的目录和文件信息
+        init_dirs = set()
+        # 收集每个目录下的文件，用于生成导入语句
+        dir_files = {}  # {dir_path: [file_info]}
+        
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # 跟踪已添加的文件名以避免重复
+            added_files = set()
+            
+            # 首先生成模块根目录的 __init__.py
+            init_template_path = os.path.join(template_dir, 'py/__init__.py.vm')
+            if os.path.exists(init_template_path):
+                try:
+                    with open(init_template_path, 'r', encoding='utf-8') as f:
+                        template_content = f.read()
+                    
+                    # 准备模板上下文（单个表时，tables 为 None）
+                    context = {
+                        'table': table,
+                        'tables': None,  # 单个表生成时，tables 为 None
+                        'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'underscore': to_underscore,
+                        'get_import_path': GenUtils.get_import_path
+                    }
+                    
+                    # 使用Jinja2渲染模板
+                    template = Template(template_content)
+                    rendered_content = template.render(**context)
+                    
+                    # 生成文件名
+                    init_file_path = f"{module_path}/__init__.py"
+                    
+                    # 将渲染后的内容写入ZIP文件
+                    if rendered_content.strip():
+                        zip_file.writestr(init_file_path, rendered_content)
+                        added_files.add(init_file_path)
+                except Exception as e:
+                    print(f"处理模块 __init__.py 模板时出错: {e}")
+            
             # 处理每个核心模板文件
             for relative_path in core_templates:
                 template_path = os.path.join(template_dir, relative_path)
@@ -284,6 +369,8 @@ class GenUtils:
                             template_content = f.read()
                             
                         # 准备模板上下文
+                        # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
+                        # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
                         context = {
                             'table': table,
                             'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -295,8 +382,45 @@ class GenUtils:
                         template = Template(template_content)
                         rendered_content = template.render(**context)
                         
+                        # 如果是 SQL 模板，恢复原始 module_name（虽然已经强制设置了，但为了安全）
+                        if 'sql/menu.sql' in relative_path:
+                            pass  # 已经强制设置为 model_name，不需要恢复
+                        
                         # 生成文件名
                         output_file_name = GenUtils.get_file_name(relative_path, table)
+                        
+                        # 收集目录路径和文件信息，用于生成 __init__.py
+                        # 跳过 sql 和 vue 目录，这些目录不需要 __init__.py
+                        dir_path = os.path.dirname(output_file_name)
+                        if dir_path and 'sql' not in dir_path and 'vue' not in dir_path:
+                            init_dirs.add(dir_path)
+                            # 同时收集父目录（但也要跳过 sql 和 vue）
+                            parts = dir_path.split('/')
+                            for i in range(1, len(parts)):
+                                parent_dir = '/'.join(parts[:i])
+                                if parent_dir and 'sql' not in parent_dir and 'vue' not in parent_dir:
+                                    init_dirs.add(parent_dir)
+                            
+                            # 收集文件信息用于生成导入语句
+                            file_name = os.path.basename(output_file_name)
+                            file_base = os.path.splitext(file_name)[0]
+                            
+                            if dir_path not in dir_files:
+                                dir_files[dir_path] = []
+                            
+                            # 根据文件类型确定导入的类名
+                            if '/entity/' in output_file_name and '.py' in output_file_name:
+                                # Entity 文件在 domain/entity/ 目录下
+                                dir_files[dir_path].append(('entity', table.class_name, table))
+                            elif '/po/' in output_file_name and '_po.py' in output_file_name:
+                                # PO 文件在 domain/po/ 目录下
+                                dir_files[dir_path].append(('po', f"{to_underscore(table.class_name)}_po", table))
+                            elif '_service.py' in output_file_name:
+                                dir_files[dir_path].append(('service', f"{table.class_name}Service", table))
+                            elif '_mapper.py' in output_file_name:
+                                dir_files[dir_path].append(('mapper', f"{table.class_name}Mapper", table))
+                            elif '_controller.py' in output_file_name:
+                                dir_files[dir_path].append(('controller', 'gen', table))
                         
                         # 检查渲染后的内容是否为空
                         if rendered_content.strip():
@@ -306,6 +430,69 @@ class GenUtils:
                             print(f"警告: 模板 {relative_path} 渲染后内容为空")
                     except Exception as e:
                         print(f"处理模板 {relative_path} 时出错: {e}")
+            
+            # 为每个目录生成 __init__.py 文件，使其成为完整的 Python 模块
+            for dir_path in sorted(init_dirs):
+                # 跳过模块根目录，因为已经在开始时生成
+                if dir_path == module_path:
+                    continue
+                
+                # 跳过 sql 和 vue 目录，这些目录不需要 __init__.py
+                if 'sql' in dir_path or 'vue' in dir_path or dir_path.startswith('sql/') or dir_path.startswith('vue/'):
+                    continue
+                
+                init_file_path = os.path.join(dir_path, '__init__.py').replace('\\', '/')
+                
+                # 生成 __init__.py 内容
+                init_lines = ["# -*- coding: utf-8 -*-"]
+                init_lines.append(f"# @Module: {dir_path}")
+                init_lines.append("")
+                
+                # 特殊处理 controller 目录：参考 ruoyi_generator/controller/__init__.py 的格式
+                if 'controller' in dir_path and dir_path.endswith('/controller'):
+                    # 在 controller/__init__.py 中为每个 controller 创建蓝图
+                    if dir_path in dir_files:
+                        # 先导入 Blueprint
+                        init_lines.append("from flask import Blueprint")
+                        init_lines.append("")
+                        
+                        # 为每个 controller 创建蓝图
+                        for file_type, class_name, table_info in dir_files[dir_path]:
+                            if file_type == 'controller':
+                                blueprint_name = to_underscore(table_info.class_name)
+                                url_prefix = f"/{table_info.module_name}/{table_info.business_name}"
+                                init_lines.append(f"{blueprint_name} = Blueprint('{blueprint_name}', __name__, url_prefix='{url_prefix}')")
+                        
+                        # 导入各个 controller 模块
+                        init_lines.append("")
+                        init_lines.append("")
+                        for file_type, class_name, table_info in dir_files[dir_path]:
+                            if file_type == 'controller':
+                                controller_module_name = f"{to_underscore(table_info.class_name)}_controller"
+                                init_lines.append(f"from . import {controller_module_name}")
+                else:
+                    # 其他目录正常生成导入语句
+                    if dir_path in dir_files:
+                        imports = []
+                        for file_type, class_name, table_info in dir_files[dir_path]:
+                            if file_type == 'entity':
+                                # Entity 文件在 domain/entity/ 目录下，导入时使用文件名
+                                entity_file_name = to_underscore(class_name)
+                                imports.append(f"from .{entity_file_name} import {class_name}")
+                            elif file_type == 'po':
+                                # PO 文件在 domain/po/ 目录下，导入时使用文件名
+                                po_file_name = class_name  # class_name 已经是 address_info_po
+                                imports.append(f"from .{po_file_name} import {class_name}")
+                            elif file_type == 'service':
+                                imports.append(f"from .{to_underscore(class_name.replace('Service', ''))}_service import {class_name}")
+                            elif file_type == 'mapper':
+                                imports.append(f"from .{to_underscore(class_name.replace('Mapper', ''))}_mapper import {class_name}")
+                        
+                        if imports:
+                            init_lines.extend(sorted(set(imports)))
+                
+                init_content = "\n".join(init_lines) + "\n"
+                zip_file.writestr(init_file_path, init_content)
         
         zip_buffer.seek(0)
         return zip_buffer
@@ -330,8 +517,30 @@ class GenUtils:
                 table.pk_column = pk_columns[0]
             else:
                 table.pk_column = None
+            
+            # 从 options 中解析 parentMenuId
+            if table.options:
+                import json
+                try:
+                    if isinstance(table.options, str):
+                        options_dict = json.loads(table.options)
+                    else:
+                        options_dict = table.options
+                    # 从 options 中提取 parentMenuId 并设置到 table
+                    if 'parentMenuId' in options_dict:
+                        table.parent_menu_id = options_dict.get('parentMenuId')
+                except Exception as e:
+                    print(f"解析 options 字段出错: {e}")
+            
+            # 强制使用前端模块名（modelName），而不是 Python 模块名
+            # module_name 必须使用 modelName（test），不能使用 pythonModelName（ruoyi_test）
+            if not table.module_name or table.module_name == GeneratorConfig.python_model_name or table.module_name.strip() == GeneratorConfig.python_model_name:
+                table.module_name = GeneratorConfig.model_name
+            # 额外检查：如果 module_name 等于 python_model_name，强制替换
+            if table.module_name == GeneratorConfig.python_model_name:
+                table.module_name = GeneratorConfig.model_name
         
-        # 定义核心模板文件
+        # 定义核心模板文件（每个表都会生成，但 __init__.py 只生成一次）
         core_templates = [
             'py/entity.py.vm',
             'py/po.py.vm', 
@@ -348,9 +557,58 @@ class GenUtils:
         # 获取模板目录
         template_dir = os.path.join(os.path.dirname(__file__), 'vm')
         
+        # 确定模块路径（使用第一个表的模块路径）
+        if tables and len(tables) > 0:
+            first_table = tables[0]
+            if first_table.package_name:
+                module_path = first_table.package_name.replace('.', '/')
+            else:
+                # 使用 pythonModelName 作为后端模块路径
+                module_path = GeneratorConfig.python_model_name if hasattr(GeneratorConfig, 'python_model_name') else (first_table.module_name if first_table.module_name else 'ruoyi_generator')
+        else:
+            module_path = GeneratorConfig.python_model_name if hasattr(GeneratorConfig, 'python_model_name') else 'ruoyi_generator'
+        
+        # 收集需要生成 __init__.py 的目录和文件信息
+        init_dirs = set()
+        # 收集每个目录下的文件，用于生成导入语句 {dir_path: [(file_type, class_name, table)]}
+        dir_files = {}
+        
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             # 跟踪已添加的文件名以避免重复
             added_files = set()
+            
+            # 首先为模块根目录生成 __init__.py（只生成一次，使用第一个表的信息）
+            if tables and len(tables) > 0:
+                init_template_path = os.path.join(template_dir, 'py/__init__.py.vm')
+                if os.path.exists(init_template_path):
+                    try:
+                        with open(init_template_path, 'r', encoding='utf-8') as f:
+                            template_content = f.read()
+                        
+                        # 准备模板上下文（批量生成时，传入所有表）
+                        # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
+                        # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
+                        context = {
+                            'table': first_table,  # 用于兼容模板中的 table 变量
+                            'tables': tables,  # 传入所有表，用于循环注册所有蓝图
+                            'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'underscore': to_underscore,
+                            'get_import_path': GenUtils.get_import_path
+                        }
+                        
+                        # 使用Jinja2渲染模板
+                        template = Template(template_content)
+                        rendered_content = template.render(**context)
+                        
+                        # 生成文件名
+                        init_file_path = f"{module_path}/__init__.py"
+                        
+                        # 将渲染后的内容写入ZIP文件（只写入一次）
+                        if rendered_content.strip() and init_file_path not in added_files:
+                            zip_file.writestr(init_file_path, rendered_content)
+                            added_files.add(init_file_path)
+                    except Exception as e:
+                        print(f"处理模块 __init__.py 模板时出错: {e}")
             
             # 处理每个表
             for table in tables:
@@ -362,6 +620,10 @@ class GenUtils:
                 
                 # 处理每个核心模板文件
                 for relative_path in current_templates:
+                    # 跳过模块根目录的 __init__.py，因为已经在开始时生成
+                    if relative_path == 'py/__init__.py.vm':
+                        continue
+                    
                     template_path = os.path.join(template_dir, relative_path)
                     if os.path.exists(template_path):
                         # 读取模板内容
@@ -370,6 +632,8 @@ class GenUtils:
                                 template_content = f.read()
                                 
                             # 准备模板上下文
+                            # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
+                            # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
                             context = {
                                 'table': table,
                                 'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -383,6 +647,36 @@ class GenUtils:
                             
                             # 生成文件名
                             output_file_name = GenUtils.get_file_name(relative_path, table)
+                            
+                            # 收集目录路径和文件信息，用于生成 __init__.py
+                            # 跳过 sql 和 vue 目录，这些目录不需要 __init__.py
+                            dir_path = os.path.dirname(output_file_name)
+                            if dir_path and 'sql' not in dir_path and 'vue' not in dir_path:
+                                init_dirs.add(dir_path)
+                                # 同时收集父目录（但也要跳过 sql 和 vue）
+                                parts = dir_path.split('/')
+                                for i in range(1, len(parts)):
+                                    parent_dir = '/'.join(parts[:i])
+                                    if parent_dir and 'sql' not in parent_dir and 'vue' not in parent_dir:
+                                        init_dirs.add(parent_dir)
+                                
+                                # 收集文件信息用于生成导入语句
+                                if dir_path not in dir_files:
+                                    dir_files[dir_path] = []
+                                
+                                # 根据文件类型确定导入的类名
+                                if '/entity/' in output_file_name and '.py' in output_file_name:
+                                    # Entity 文件在 domain/entity/ 目录下
+                                    dir_files[dir_path].append(('entity', table.class_name, table))
+                                elif '/po/' in output_file_name and '_po.py' in output_file_name:
+                                    # PO 文件在 domain/po/ 目录下
+                                    dir_files[dir_path].append(('po', f"{to_underscore(table.class_name)}_po", table))
+                                elif '_service.py' in output_file_name:
+                                    dir_files[dir_path].append(('service', f"{table.class_name}Service", table))
+                                elif '_mapper.py' in output_file_name:
+                                    dir_files[dir_path].append(('mapper', f"{table.class_name}Mapper", table))
+                                elif '_controller.py' in output_file_name:
+                                    dir_files[dir_path].append(('controller', 'gen', table))
                             
                             # 检查是否已添加同名文件
                             if output_file_name in added_files:
@@ -404,6 +698,69 @@ class GenUtils:
                                 print(f"警告: 模板 {relative_path} 渲染后内容为空")
                         except Exception as e:
                             print(f"处理表 {table.table_name} 的模板 {relative_path} 时出错: {e}")
+            
+            # 为每个目录生成 __init__.py 文件，使其成为完整的 Python 模块
+            for dir_path in sorted(init_dirs):
+                # 跳过模块根目录，因为已经在开始时生成
+                if dir_path == module_path:
+                    continue
+                
+                # 跳过 sql 和 vue 目录，这些目录不需要 __init__.py
+                if 'sql' in dir_path or 'vue' in dir_path or dir_path.startswith('sql/') or dir_path.startswith('vue/'):
+                    continue
+                
+                init_file_path = os.path.join(dir_path, '__init__.py').replace('\\', '/')
+                
+                # 生成 __init__.py 内容
+                init_lines = ["# -*- coding: utf-8 -*-"]
+                init_lines.append(f"# @Module: {dir_path}")
+                init_lines.append("")
+                
+                # 特殊处理 controller 目录：参考 ruoyi_generator/controller/__init__.py 的格式
+                if 'controller' in dir_path and dir_path.endswith('/controller'):
+                    # 在 controller/__init__.py 中为每个 controller 创建蓝图
+                    if dir_path in dir_files:
+                        # 先导入 Blueprint
+                        init_lines.append("from flask import Blueprint")
+                        init_lines.append("")
+                        
+                        # 为每个 controller 创建蓝图
+                        for file_type, class_name, table_info in dir_files[dir_path]:
+                            if file_type == 'controller':
+                                blueprint_name = to_underscore(table_info.class_name)
+                                url_prefix = f"/{table_info.module_name}/{table_info.business_name}"
+                                init_lines.append(f"{blueprint_name} = Blueprint('{blueprint_name}', __name__, url_prefix='{url_prefix}')")
+                        
+                        # 导入各个 controller 模块
+                        init_lines.append("")
+                        init_lines.append("")
+                        for file_type, class_name, table_info in dir_files[dir_path]:
+                            if file_type == 'controller':
+                                controller_module_name = f"{to_underscore(table_info.class_name)}_controller"
+                                init_lines.append(f"from . import {controller_module_name}")
+                else:
+                    # 其他目录正常生成导入语句
+                    if dir_path in dir_files:
+                        imports = []
+                        for file_type, class_name, table_info in dir_files[dir_path]:
+                            if file_type == 'entity':
+                                # Entity 文件在 domain/entity/ 目录下，导入时使用文件名
+                                entity_file_name = to_underscore(class_name)
+                                imports.append(f"from .{entity_file_name} import {class_name}")
+                            elif file_type == 'po':
+                                # PO 文件在 domain/po/ 目录下，导入时使用文件名
+                                po_file_name = class_name  # class_name 已经是 address_info_po
+                                imports.append(f"from .{po_file_name} import {class_name}")
+                            elif file_type == 'service':
+                                imports.append(f"from .{to_underscore(class_name.replace('Service', ''))}_service import {class_name}")
+                            elif file_type == 'mapper':
+                                imports.append(f"from .{to_underscore(class_name.replace('Mapper', ''))}_mapper import {class_name}")
+                        
+                        if imports:
+                            init_lines.extend(sorted(set(imports)))
+                
+                init_content = "\n".join(init_lines) + "\n"
+                zip_file.writestr(init_file_path, init_content)
         
         zip_buffer.seek(0)
         return zip_buffer
@@ -447,6 +804,29 @@ class GenUtils:
         else:
             table.pk_column = None
         
+        # 从 options 中解析 parentMenuId
+        if table.options:
+            import json
+            try:
+                if isinstance(table.options, str):
+                    options_dict = json.loads(table.options)
+                else:
+                    options_dict = table.options
+                # 从 options 中提取 parentMenuId 并设置到 table
+                if 'parentMenuId' in options_dict:
+                    table.parent_menu_id = options_dict.get('parentMenuId')
+            except Exception as e:
+                print(f"解析 options 字段出错: {e}")
+        
+        # 强制使用前端模块名（modelName），而不是 Python 模块名
+        # module_name 必须使用 modelName（test），不能使用 pythonModelName（ruoyi_test）
+        # 如果 module_name 是空的、等于 python_model_name 或包含 python_model_name，强制替换为 model_name
+        original_module_name = table.module_name
+        if not table.module_name or table.module_name == GeneratorConfig.python_model_name or (table.module_name and GeneratorConfig.python_model_name in table.module_name):
+            table.module_name = GeneratorConfig.model_name
+            if original_module_name != table.module_name:
+                print(f"警告：table.module_name 从 '{original_module_name}' 强制替换为 '{table.module_name}'（前端模块名）")
+        
         # 获取模板目录
         template_dir = os.path.join(os.path.dirname(__file__), 'vm')
         
@@ -480,6 +860,8 @@ class GenUtils:
                         template_content = f.read()
                         
                     # 准备模板上下文
+                    # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
+                    # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
                     context = {
                         'table': table,
                         'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),

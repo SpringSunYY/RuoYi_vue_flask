@@ -126,8 +126,8 @@ class GenTableService:
             table.class_name = to_underscore(clean_table_name)
             table.business_name = GenUtils.get_business_name(clean_table_name)
             table.package_name = GeneratorConfig.package_name
-            table.module_name = StringUtil.substring_before(clean_table_name, "_") if hasattr(StringUtil,
-                                                                                              'substring_before') and "_" in clean_table_name else clean_table_name
+            # 使用配置中的 modelName 作为模块名
+            table.module_name = GeneratorConfig.model_name
 
             # 获取表注释
             try:

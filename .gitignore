@@ -37,7 +37,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 **/*.log
-ruoyi-test/*
+ruoyi_test/*
 tests/**/coverage/
 tests/e2e/reports
 selenium-debug.log

@@ -1,0 +1,23 @@
+# -*- coding: utf-8 -*-
+# @Module: {{ table.module_name }}
+# @Author: {{ table.function_author }}
+
+def init_app(app):
+    """
+    初始化模块，注册蓝图
+    
+    Args:
+        app: Flask应用实例
+    """
+    # 导入 controller 模块，自动注册所有蓝图
+{%- if tables %}
+{%- for table in tables %}
+    # 使用 pythonModelName 生成 Python 导入路径
+    from {{ get_import_path(table.package_name, '', 'controller') }} import {{ underscore(table.class_name) }}
+    app.register_blueprint({{ underscore(table.class_name) }})
+{%- endfor %}
+{%- else %}
+    # 使用 pythonModelName 生成 Python 导入路径
+    from {{ get_import_path(table.package_name, '', 'controller') }} import {{ underscore(table.class_name) }}
+    app.register_blueprint({{ underscore(table.class_name) }})
+{%- endif %}

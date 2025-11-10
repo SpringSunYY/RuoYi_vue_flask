@@ -9,7 +9,7 @@ from datetime import datetime
 from sqlalchemy import select, update, delete, func
 
 from ruoyi_admin.ext import db
-from {{ get_import_path(table.package_name, 'domain') }} import {{ table.class_name }}
+from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
 
 class {{ table.class_name }}Mapper:
     """{{ table.function_name }}Mapper"""

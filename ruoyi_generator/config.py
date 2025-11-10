@@ -10,6 +10,12 @@ class GeneratorConfig:
     # 作者
     author = "YY"
     
+    # 默认前端模块名（用于前端代码路径和SQL component）
+    model_name = "test"
+    
+    # 默认Python模块名（用于后端代码路径）
+    python_model_name = "ruoyi_test"
+    
     # 默认包名
     package_name = "com.yy.project"
     
@@ -27,6 +33,8 @@ class GeneratorConfig:
             gen_config = config_data.get("gen", {})
             
             author = gen_config.get("author", author)
+            model_name = gen_config.get("modelName", model_name)
+            python_model_name = gen_config.get("pythonModelName", python_model_name)
             package_name = gen_config.get("packageName", package_name)
             auto_remove_pre = gen_config.get("autoRemovePre", auto_remove_pre)
             table_prefix = gen_config.get("tablePrefix", table_prefix)

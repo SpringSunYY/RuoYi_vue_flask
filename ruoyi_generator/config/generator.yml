@@ -1,5 +1,10 @@
 gen:
+#  作者
   author: YY
-  packageName: com.yy.project
+#  模块,你需要生成python的模块
+  pythonModelName: ruoyi_test
+  #模块,真正的模块名字
+  modelName: test
+  packageName: 
   autoRemovePre: true
-  tablePrefix: sys_
+  tablePrefix: tb_

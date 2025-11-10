@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # @Author  : {{ table.function_author }}
-# @FileName: {{ table.class_name }}PO.py
+# @FileName: {{ underscore(table.class_name) }}_po.py
 # @Time    : {{ datetime }}
 
 from typing import Optional, Union
@@ -11,7 +11,7 @@ from pydantic import ConfigDict, Field
 from ruoyi_common.base.model import BaseEntity
 from ruoyi_common.utils.base import DateUtil
 
-class {{ table.class_name }}PO(BaseEntity):
+class {{ underscore(table.class_name) }}_po(BaseEntity):
     """
     {{ table.table_comment }}PO对象
     """

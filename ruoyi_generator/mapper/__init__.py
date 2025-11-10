@@ -89,12 +89,20 @@ class GenTableMapper:
         """
         # 查询真实的数据库表信息
         try:
-            # 查询所有表名
-            result = db.session.execute(text("SHOW TABLES")).fetchall()
-            table_names = [row[0] for row in result]
+            # 查询所有表名、表注释、创建时间和更新时间，按创建时间倒序排列
+            result = db.session.execute(text("""
+                SELECT table_name, table_comment, create_time, update_time 
+                FROM information_schema.tables 
+                WHERE table_schema = DATABASE() 
+                ORDER BY create_time DESC
+            """)).fetchall()
             
             tables = []
-            for table_name in table_names:
+            for row in result:
+                table_name = row[0]
+                table_comment = row[1] if row[1] else table_name
+                create_time = row[2] if len(row) > 2 else None
+                update_time = row[3] if len(row) > 3 else None
                 # 检查是否已导入
                 exists_result = db.session.execute(
                     text("SELECT COUNT(1) FROM gen_table WHERE table_name = :table_name"),
@@ -103,22 +111,22 @@ class GenTableMapper:
                 
                 exists = exists_result[0] > 0 if exists_result else False
                 if not exists:
-                    # 获取表注释
-                    table_comment_result = db.session.execute(
-                        text("SELECT table_comment FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table_name"),
-                        {"table_name": table_name}
-                    ).fetchone()
-                    table_comment = table_comment_result[0] if table_comment_result else table_name
                     
                     table = GenTable()
                     table.table_name = table_name
                     table.table_comment = table_comment
+                    # 设置创建时间和更新时间
+                    if create_time:
+                        table.create_time = create_time
+                    if update_time:
+                        table.update_time = update_time
                     # 设置默认值，以便前端显示
                     clean_table_name = GenUtils.remove_table_prefix(table_name) if GeneratorConfig.auto_remove_pre else table_name
                     # 使用下划线命名法而不是驼峰命名法
                     table.class_name = to_underscore(clean_table_name)
                     table.package_name = GeneratorConfig.package_name
-                    table.module_name = StringUtil.substring_before(clean_table_name, "_") if hasattr(StringUtil, 'substring_before') and "_" in clean_table_name else clean_table_name
+                    # 使用配置中的 modelName 作为模块名
+                    table.module_name = GeneratorConfig.model_name
                     table.business_name = StringUtil.substring_after(clean_table_name, "_") if hasattr(StringUtil, 'substring_after') and "_" in clean_table_name else clean_table_name
                     table.function_name = table.business_name
                     table.function_author = GeneratorConfig.author
@@ -292,12 +300,17 @@ class GenTableMapper:
             table_data = gen_table.model_dump(by_alias=False, exclude_none=True)
             
             # 移除不需要更新的字段
-            exclude_fields = {'table_id', 'page_size', 'page_num', 'columns', 'pk_column', 'tree_name', 'tree_code', 'tree_parent_code'}
+            exclude_fields = {'table_id', 'page_size', 'page_num', 'columns', 'pk_column', 'tree_name', 'tree_code', 'tree_parent_code', 'parent_menu_id'}
             for field in exclude_fields:
                 table_data.pop(field, None)
             
             table_data.pop('create_time', None)
             table_data.pop('create_by', None)
+            
+            # 确保 options 字段被正确更新（即使为空也要更新）
+            if 'options' in table_data:
+                # options 字段需要保留，即使可能是空字符串
+                pass
             
             # 确保必要的字段有默认值
             table_data.setdefault('update_by', 'admin')

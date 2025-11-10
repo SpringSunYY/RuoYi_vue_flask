@@ -45,6 +45,8 @@ class GenTable(BaseEntity):
     tree_code: Optional[str] = Field(None, alias='treeCode')
     tree_parent_code: Optional[str] = Field(None, alias='treeParentCode')
     tree_name: Optional[str] = Field(None, alias='treeName')
+    # 菜单相关字段
+    parent_menu_id: Optional[int] = Field(None, alias='parentMenuId')
 
     # 分页参数
     page_num: Optional[int] = Field(None, alias='pageNum')
@@ -52,13 +54,16 @@ class GenTable(BaseEntity):
 
     @model_validator(mode='after')
     def process_options(self):
-        # 解析options字段以设置tree相关属性
+        # 解析options字段以设置tree相关属性和parent_menu_id
         if self.options and isinstance(self.options, str):
             try:
                 options_dict = json.loads(self.options)
                 self.tree_name = options_dict.get('treeName')
                 self.tree_code = options_dict.get('treeCode')
                 self.tree_parent_code = options_dict.get('treeParentCode')
+                # 从options中解析parent_menu_id
+                if 'parentMenuId' in options_dict:
+                    self.parent_menu_id = options_dict.get('parentMenuId')
             except Exception:
                 pass
         return self

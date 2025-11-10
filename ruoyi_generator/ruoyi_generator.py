@@ -71,8 +71,20 @@ class RuoYiGenerator:
                 table.tree_name = table.options.get('treeName')
                 table.tree_code = table.options.get('treeCode')
                 table.tree_parent_code = table.options.get('treeParentCode')
+                # 从 options 中提取 parentMenuId
+                if 'parentMenuId' in table.options:
+                    table.parent_menu_id = table.options.get('parentMenuId')
             except Exception:
                 pass
+        
+        # 强制使用前端模块名（modelName），而不是 Python 模块名
+        # module_name 必须使用 modelName（test），不能使用 pythonModelName（ruoyi_test）
+        # 如果 module_name 是空的、等于 python_model_name 或包含 python_model_name，强制替换为 model_name
+        original_module_name = table.module_name
+        if not table.module_name or table.module_name == GeneratorConfig.python_model_name or (table.module_name and GeneratorConfig.python_model_name in table.module_name):
+            table.module_name = GeneratorConfig.model_name
+            if original_module_name != table.module_name:
+                print(f"警告：table.module_name 从 '{original_module_name}' 强制替换为 '{table.module_name}'（前端模块名）")
         
         # 设置模板数据
         data = {
@@ -209,7 +221,8 @@ class RuoYiGenerator:
             # 使用下划线命名法而不是驼峰命名法
             table.class_name = to_underscore(clean_table_name)
             table.package_name = GeneratorConfig.package_name
-            table.module_name = StringUtil.substring_before(clean_table_name, "_") if hasattr(StringUtil, 'substring_before') and "_" in clean_table_name else clean_table_name
+            # 使用配置中的 modelName 作为模块名
+            table.module_name = GeneratorConfig.model_name
             table.business_name = StringUtil.substring_after(clean_table_name, "_") if hasattr(StringUtil, 'substring_after') and "_" in clean_table_name else clean_table_name
             table.function_name = table.business_name
             table.function_author = GeneratorConfig.author

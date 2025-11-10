@@ -130,6 +130,35 @@ def update_gen_table(dto: GenTablePO):
     for attr in dto.model_fields.keys():
         if hasattr(gen_table, attr):
             setattr(gen_table, attr, getattr(dto, attr))
+    
+    # 处理 options 字段和 parentMenuId
+    import json
+    options_dict = {}
+    
+    # 如果 options 字段存在，先解析它
+    if hasattr(dto, 'options') and dto.options:
+        try:
+            if isinstance(dto.options, str):
+                options_dict = json.loads(dto.options)
+            else:
+                options_dict = dto.options.copy() if hasattr(dto.options, 'copy') else dto.options
+        except Exception as e:
+            print(f"解析 options 字段出错: {e}")
+            options_dict = {}
+    
+    # 检查 params 中是否有 parentMenuId（前端可能通过 params 传递）
+    if hasattr(dto, 'params') and dto.params:
+        if isinstance(dto.params, dict) and 'parentMenuId' in dto.params:
+            options_dict['parentMenuId'] = dto.params.get('parentMenuId')
+    
+    # 如果 options_dict 中有 parentMenuId，更新 options 字段
+    if 'parentMenuId' in options_dict:
+        gen_table.options = json.dumps(options_dict, ensure_ascii=False)
+        gen_table.parent_menu_id = options_dict.get('parentMenuId')
+        print(f"设置 parentMenuId: {options_dict.get('parentMenuId')}, options: {gen_table.options}")
+    elif options_dict:
+        # 即使没有 parentMenuId，也要保存其他 options
+        gen_table.options = json.dumps(options_dict, ensure_ascii=False)
 
     # 特别处理columns字段
     if hasattr(dto, 'columns') and dto.columns is not None:

@@ -243,7 +243,7 @@ export default {
           { required: true, message: "请选择生成模板", trigger: "blur" }
         ],
         packageName: [
-          { required: true, message: "请输入生成包路径", trigger: "blur" }
+          { required: false, message: "请输入生成包路径", trigger: "blur" }
         ],
         moduleName: [
           { required: true, message: "请输入生成模块名", trigger: "blur" }

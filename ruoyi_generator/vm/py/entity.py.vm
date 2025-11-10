@@ -3,46 +3,36 @@
 # @FileName: {{ table.class_name }}.py
 # @Time    : {{ datetime }}
 
-from typing import Optional, Union
+from typing import Optional
 from datetime import datetime
+from pydantic import Field
 from ruoyi_common.base.model import BaseEntity
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, BigInteger
-from ruoyi_common.utils.base import DateUtil
 
 class {{ table.class_name }}(BaseEntity):
     """
     {{ table.table_comment }}对象
     """
-    
-    __tablename__ = '{{ table.table_name }}'
 {%- for column in table.columns %}
 {%- if column.java_type == 'String' or column.java_type == 'str' %}
-    {{ underscore(column.java_field) }} = Column(String(255), default=None, doc="{{ column.column_comment }}")
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[str] = Field(default=None, description="{{ column.column_comment }}")
 {%- elif column.java_type == 'Integer' or column.java_type == 'int' %}
-    {{ underscore(column.java_field) }} = Column(Integer, default=None, doc="{{ column.column_comment }}")
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[int] = Field(default=None, description="{{ column.column_comment }}")
 {%- elif column.java_type == 'Long' %}
-    {{ underscore(column.java_field) }} = Column(BigInteger, default=None, doc="{{ column.column_comment }}")
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[int] = Field(default=None, description="{{ column.column_comment }}")
 {%- elif column.java_type == 'Float' or column.java_type == 'Double' %}
-    {{ underscore(column.java_field) }} = Column(Float, default=None, doc="{{ column.column_comment }}")
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[float] = Field(default=None, description="{{ column.column_comment }}")
 {%- elif column.java_type == 'Boolean' or column.java_type == 'bool' %}
-    {{ underscore(column.java_field) }} = Column(Boolean, default=None, doc="{{ column.column_comment }}")
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[bool] = Field(default=None, description="{{ column.column_comment }}")
+{%- elif column.java_type == 'Date' or column.java_type == 'DateTime' %}
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[datetime] = Field(default=None, description="{{ column.column_comment }}")
 {%- else %}
-    {{ underscore(column.java_field) }} = Column(String(255), default=None, doc="{{ column.column_comment }}")
+    # {{ column.column_comment }}
+    {{ underscore(column.java_field) }}: Optional[str] = Field(default=None, description="{{ column.column_comment }}")
 {%- endif %}
 {%- endfor %}
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # 初始化所有字段
-{%- for column in table.columns %}
-        self.{{ underscore(column.java_field) }} = kwargs.get('{{ underscore(column.java_field) }}', None)
-{%- endfor %}
-
-    def to_dict(self):
-        """转换为字典"""
-        result = super().to_dict()
-        # 添加实体类特定字段
-{%- for column in table.columns %}
-        result['{{ underscore(column.java_field) }}'] = self.{{ underscore(column.java_field) }}
-{%- endfor %}
-        return result
