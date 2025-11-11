@@ -612,6 +612,7 @@ class MimeTypeUtil:
         # pdf
         "pdf" ]
     
+    @classmethod
     def get_extension(cls, mime_type:str):
         '''
         根据mime_type获取文件扩展名
@@ -768,11 +769,18 @@ class FileUploadUtil:
         Returns:
             str: 文件名
         '''
-        "{}/{}_{}.{}".format(
-            DateUtil.get_date_path(),
-            os.path.basename(file.filename),
-            Seq.get_seq_id(cls.upload_seq_type),
-            cls.get_extension(file)
+        date_path = DateUtil.get_date_path()
+        base_name = os.path.basename(file.filename)
+        seq = Seq.get_seq_id(Seq.upload_seq_type)
+        ext = cls.get_extension(file)
+        if ext and not ext.startswith("."):
+            # 统一补上点
+            ext = f".{ext}"
+        return "{}/{}_{}{}".format(
+            date_path,
+            base_name,
+            seq,
+            ext
         )
 
     @classmethod
@@ -896,7 +904,7 @@ class Seq:
         seq = str(ato.increment())
         if ato.get() > math.pow(10, length):
             ato.set(1)
-        return StringUtil.left_pad(seq, length)
+        return StringUtil.pad_left(seq, length)
         
 
 class MessageUtil:
