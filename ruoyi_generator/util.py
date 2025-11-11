@@ -20,9 +20,68 @@ def to_underscore(name: str) -> str:
     Returns:
         str: 下划线命名的字符串
     """
+    # 处理 None 或非字符串类型
+    if name is None:
+        return ""
+    if not isinstance(name, str):
+        return str(name)
     # 在大写字母前添加下划线，然后转为小写
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def capitalize_first(name: str) -> str:
+    """
+    将字符串首字母大写
+    
+    Args:
+        name (str): 输入字符串
+        
+    Returns:
+        str: 首字母大写的字符串
+    """
+    if name is None or not isinstance(name, str) or len(name) == 0:
+        return ""
+    return name[0].upper() + name[1:] if len(name) > 1 else name.upper()
+
+
+def get_tree_column_index(column, all_columns):
+    """
+    计算树表中列的索引（排除主键列）
+    
+    Args:
+        column: 当前列对象
+        all_columns: 所有列的列表
+        
+    Returns:
+        int: 列在树表中的索引
+    """
+    index = 0
+    for col in all_columns:
+        if col.is_list == '1' and not (col.is_pk == '1'):
+            # 使用 column_id 或 column_name 来比较列对象
+            if hasattr(column, 'column_id') and hasattr(col, 'column_id'):
+                if col.column_id == column.column_id:
+                    return index
+            elif hasattr(column, 'column_name') and hasattr(col, 'column_name'):
+                if col.column_name == column.column_name:
+                    return index
+            index += 1
+    return 0
+
+
+def get_filtered_columns(columns, filter_func):
+    """
+    过滤列并返回过滤后的列表
+    
+    Args:
+        columns: 所有列的列表
+        filter_func: 过滤函数，接受一个列对象，返回True表示保留
+        
+    Returns:
+        list: 过滤后的列列表
+    """
+    return [col for col in columns if filter_func(col)]
 
 
 class GenUtils:
@@ -74,7 +133,7 @@ class GenUtils:
             # PO文件放在 domain/po/ 目录下，使用下划线命名法
             po_name = f"{to_underscore(table.class_name)}_po"
             return f"{module_path}/domain/po/{po_name}.py"
-        elif 'vue/index.vue' in template_file or 'vue/index-tree.vue' in template_file:
+        elif 'vue/index.vue' in template_file or 'vue/index-tree.vue' in template_file or 'vue/index-sub.vue' in template_file:
             # 无论是树表还是普通表，Vue文件名都是index.vue
             # 使用数据库中的 module_name（前端模块名）
             frontend_module = table.module_name if table.module_name else GeneratorConfig.model_name
@@ -306,6 +365,8 @@ class GenUtils:
         # 根据表类型添加相应的Vue模板
         if table.tpl_category == 'tree':
             core_templates.append('vue/index-tree.vue.vm')
+        elif table.tpl_category == 'sub':
+            core_templates.append('vue/index-sub.vue.vm')
         else:
             core_templates.append('vue/index.vue.vm')
         
@@ -342,7 +403,8 @@ class GenUtils:
                         'tables': None,  # 单个表生成时，tables 为 None
                         'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'underscore': to_underscore,
-                        'get_import_path': GenUtils.get_import_path
+                        'get_import_path': GenUtils.get_import_path,
+                        'get_tree_column_index': get_tree_column_index
                     }
                     
                     # 使用Jinja2渲染模板
@@ -371,16 +433,46 @@ class GenUtils:
                         # 准备模板上下文
                         # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
                         # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
+                        # 为树表准备过滤后的列列表
+                        if 'index-tree.vue' in relative_path:
+                            # 过滤出满足条件的列
+                            list_cols = [col for col in table.columns if col.is_list and not (col.is_pk == '1') and getattr(col, 'list_index', None) is not None]
+                            query_cols = [col for col in table.columns if col.is_query]
+                            required_cols = [col for col in table.columns if col.is_required]
+                        else:
+                            list_cols = None
+                            query_cols = None
+                            required_cols = None
+                        
                         context = {
                             'table': table,
                             'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             'underscore': to_underscore,  # 添加自定义过滤器
-                            'get_import_path': GenUtils.get_import_path  # 添加导入路径生成函数
+                            'capitalize_first': capitalize_first,  # 添加首字母大写函数
+                            'get_import_path': GenUtils.get_import_path,  # 添加导入路径生成函数
+                            'get_tree_column_index': get_tree_column_index,  # 添加树表列索引计算函数
+                            'list_cols': list_cols,  # 树表的列表列
+                            'query_cols': query_cols,  # 树表的查询列
+                            'required_cols': required_cols  # 树表的必填列
                         }
                         
                         # 使用Jinja2渲染模板
                         template = Template(template_content)
-                        rendered_content = template.render(**context)
+                        # 如果是树表模板，打印列信息用于调试
+                        if 'index-tree.vue' in relative_path:
+                            print(f"[DEBUG] 渲染树表模板前，列信息:")
+                            for col in table.columns:
+                                list_idx = getattr(col, 'list_index', 'NOT_SET')
+                                print(f"  - {col.column_name}: is_list={col.is_list}, is_pk={col.is_pk}, list_index={list_idx} (type={type(list_idx)})")
+                        try:
+                            rendered_content = template.render(**context)
+                        except Exception as e:
+                            import traceback
+                            error_detail = traceback.format_exc()
+                            print(f"[ERROR] 模板渲染失败: {relative_path}")
+                            print(f"[ERROR] 错误信息: {str(e)}")
+                            print(f"[ERROR] 详细堆栈:\n{error_detail}")
+                            raise
                         
                         # 如果是 SQL 模板，恢复原始 module_name（虽然已经强制设置了，但为了安全）
                         if 'sql/menu.sql' in relative_path:
@@ -593,7 +685,8 @@ class GenUtils:
                             'tables': tables,  # 传入所有表，用于循环注册所有蓝图
                             'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             'underscore': to_underscore,
-                            'get_import_path': GenUtils.get_import_path
+                            'get_import_path': GenUtils.get_import_path,
+                            'get_tree_column_index': get_tree_column_index
                         }
                         
                         # 使用Jinja2渲染模板
@@ -615,6 +708,8 @@ class GenUtils:
                 # 根据表类型添加相应的Vue模板
                 if table.tpl_category == 'tree':
                     current_templates = core_templates + ['vue/index-tree.vue.vm']
+                elif table.tpl_category == 'sub':
+                    current_templates = core_templates + ['vue/index-sub.vue.vm']
                 else:
                     current_templates = core_templates + ['vue/index.vue.vm']
                 
@@ -634,16 +729,44 @@ class GenUtils:
                             # 准备模板上下文
                             # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
                             # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
+                            # 为树表准备过滤后的列列表
+                            if 'index-tree.vue' in relative_path:
+                                list_cols = [col for col in table.columns if col.is_list and not (col.is_pk == '1') and getattr(col, 'list_index', None) is not None]
+                                query_cols = [col for col in table.columns if col.is_query]
+                                required_cols = [col for col in table.columns if col.is_required]
+                            else:
+                                list_cols = None
+                                query_cols = None
+                                required_cols = None
+                            
                             context = {
                                 'table': table,
                                 'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                 'underscore': to_underscore,  # 添加自定义过滤器
-                                'get_import_path': GenUtils.get_import_path  # 添加导入路径生成函数
+                                'capitalize_first': capitalize_first,  # 添加首字母大写函数
+                                'get_import_path': GenUtils.get_import_path,  # 添加导入路径生成函数
+                                'list_cols': list_cols,  # 树表的列表列
+                                'query_cols': query_cols,  # 树表的查询列
+                                'required_cols': required_cols  # 树表的必填列
                             }
                             
                             # 使用Jinja2渲染模板
                             template = Template(template_content)
-                            rendered_content = template.render(**context)
+                            # 如果是树表模板，打印列信息用于调试
+                            if 'index-tree.vue' in relative_path:
+                                print(f"[DEBUG] 批量渲染树表模板前，列信息:")
+                                for col in table.columns:
+                                    list_idx = getattr(col, 'list_index', 'NOT_SET')
+                                    print(f"  - {col.column_name}: is_list={col.is_list}, is_pk={col.is_pk}, list_index={list_idx} (type={type(list_idx)})")
+                            try:
+                                rendered_content = template.render(**context)
+                            except Exception as e:
+                                import traceback
+                                error_detail = traceback.format_exc()
+                                print(f"[ERROR] 模板渲染失败: {relative_path} (表: {table.table_name})")
+                                print(f"[ERROR] 错误信息: {str(e)}")
+                                print(f"[ERROR] 详细堆栈:\n{error_detail}")
+                                raise
                             
                             # 生成文件名
                             output_file_name = GenUtils.get_file_name(relative_path, table)
@@ -776,12 +899,29 @@ class GenUtils:
         if not table.columns:
             return
         
+        # 如果是树表，需要排除主键列
+        is_tree = table.tpl_category == 'tree'
+        print(f"[DEBUG] set_column_list_index: 表类型={table.tpl_category}, 是树表={is_tree}, 列数={len(table.columns)}")
+        
         list_index = 0
         for column in table.columns:
-            if column.is_list == '1':
+            # 对于树表，只处理 is_list='1' 且不是主键的列
+            # 对于普通表，处理所有 is_list='1' 的列
+            if column.is_list == '1' or column.is_list == 1:
+                if is_tree and (column.is_pk == '1' or column.is_pk == 1):
+                    # 树表的主键列不设置 list_index（树表中主键列不显示在列表中）
+                    # 设置为 None，但模板中会通过 not (column.is_pk == '1') 过滤掉
+                    setattr(column, 'list_index', None)
+                    print(f"[DEBUG] 树表主键列: {column.column_name}, is_list={column.is_list}, is_pk={column.is_pk}, list_index=None")
+                    continue
                 # 使用 setattr 动态添加属性
                 setattr(column, 'list_index', list_index)
+                print(f"[DEBUG] 设置列索引: {column.column_name}, is_list={column.is_list}, is_pk={column.is_pk}, list_index={list_index}")
                 list_index += 1
+            else:
+                # 非列表列也设置 list_index 为 None，保持一致性
+                setattr(column, 'list_index', None)
+                print(f"[DEBUG] 非列表列: {column.column_name}, is_list={column.is_list}, list_index=None")
 
     @staticmethod
     def preview_code(table: GenTable) -> dict:
@@ -862,22 +1002,47 @@ class GenUtils:
                     # 准备模板上下文
                     # table.module_name 是从数据库读取的前端模块名（真正的模块名，用于权限、前端、SQL）
                     # GeneratorConfig.python_model_name 是 Python 模块名（只用于 Python 后端代码路径）
+                    # 为树表准备过滤后的列列表
+                    if 'index-tree.vue' in relative_path:
+                        list_cols = [col for col in table.columns if col.is_list and not (col.is_pk == '1') and getattr(col, 'list_index', None) is not None]
+                        query_cols = [col for col in table.columns if col.is_query]
+                        required_cols = [col for col in table.columns if col.is_required]
+                    else:
+                        list_cols = None
+                        query_cols = None
+                        required_cols = None
+                    
                     context = {
                         'table': table,
                         'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'underscore': to_underscore,  # 添加自定义过滤器
-                        'get_import_path': GenUtils.get_import_path  # 添加导入路径生成函数
+                                'capitalize_first': capitalize_first,  # 添加首字母大写函数
+                        'get_import_path': GenUtils.get_import_path,  # 添加导入路径生成函数
+                        'list_cols': list_cols,  # 树表的列表列
+                        'query_cols': query_cols,  # 树表的查询列
+                        'required_cols': required_cols  # 树表的必填列
                     }
                     
                     # 使用Jinja2渲染模板
                     template = Template(template_content)
+                    # 如果是树表模板，打印列信息用于调试
+                    if 'index-tree.vue' in relative_path:
+                        print(f"[DEBUG] 预览树表模板前，列信息:")
+                        for col in table.columns:
+                            list_idx = getattr(col, 'list_index', 'NOT_SET')
+                            print(f"  - {col.column_name}: is_list={col.is_list}, is_pk={col.is_pk}, list_index={list_idx} (type={type(list_idx)})")
                     rendered_content = template.render(**context)
                     
                     # 存储渲染后的内容
                     preview_data[relative_path] = rendered_content
                 except Exception as e:
                     # 如果渲染失败，存储错误信息
-                    preview_data[relative_path] = f"模板渲染失败: {str(e)}"
+                    import traceback
+                    error_detail = traceback.format_exc()
+                    print(f"[ERROR] 模板渲染失败: {relative_path}")
+                    print(f"[ERROR] 错误信息: {str(e)}")
+                    print(f"[ERROR] 详细堆栈:\n{error_detail}")
+                    preview_data[relative_path] = f"模板渲染失败: {str(e)}\n详细错误:\n{error_detail}"
             else:
                 preview_data[relative_path] = "模板文件不存在"
         

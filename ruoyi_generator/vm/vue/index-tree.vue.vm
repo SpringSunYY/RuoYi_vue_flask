@@ -1,44 +1,68 @@
-{% macro getColumnDictType(column) -%}
-  {%- if column.dict_type != '' -%}{{ column.dict_type }}
-  {%- else -%}null
-  {%- endif -%}
-{%- endmacro %}
-
 <template>
   <div class="app-container">
     <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
-{% for column in table.columns %}
-{% if column.is_query %}
-      <el-form-item label="{{ column.column_comment }}" prop="{{ underscore(column.java_field) }}">
-  {% if column.html_type == 'input' %}
+{%- for column in table.columns %}
+{%- if column.is_query %}
+{%- set dict_type = column.dict_type if column.dict_type else '' %}
+{%- set attr_name = capitalize_first(column.java_field) %}
+{%- set comment = column.column_comment %}
+{%- if '(' in comment or '（' in comment %}
+{%- if '(' in comment %}
+{%- set comment = comment.split('(')[0] %}
+{%- elif '（' in comment %}
+{%- set comment = comment.split('（')[0] %}
+{%- endif %}
+{%- endif %}
+  {%- if column.html_type == 'input' %}
+      <el-form-item label="{{ comment }}" prop="{{ underscore(column.java_field) }}">
         <el-input
           v-model="queryParams.{{ underscore(column.java_field) }}"
-          placeholder="请输入{{ column.column_comment }}"
+          placeholder="请输入{{ comment }}"
           clearable
           @keyup.enter.native="handleQuery"
         />
-  {% elif column.html_type == 'select' and column.dict_type != '' %}
-        <el-select v-model="queryParams.{{ underscore(column.java_field) }}" placeholder="请选择{{ column.column_comment }}" clearable>
+      </el-form-item>
+  {%- elif (column.html_type == 'select' or column.html_type == 'radio') and dict_type != '' %}
+      <el-form-item label="{{ comment }}" prop="{{ underscore(column.java_field) }}">
+        <el-select v-model="queryParams.{{ underscore(column.java_field) }}" placeholder="请选择{{ comment }}" clearable>
           <el-option
-            v-for="dict in {{ getColumnDictType(column) }}Options"
+            v-for="dict in dict.type.{{ dict_type }}"
             :key="dict.value"
             :label="dict.label"
             :value="dict.value"
           />
         </el-select>
-  {% elif column.html_type == 'datetime' %}
+      </el-form-item>
+  {%- elif (column.html_type == 'select' or column.html_type == 'radio') and dict_type == '' %}
+      <el-form-item label="{{ comment }}" prop="{{ underscore(column.java_field) }}">
+        <el-select v-model="queryParams.{{ underscore(column.java_field) }}" placeholder="请选择{{ comment }}" clearable>
+          <el-option label="请选择字典生成" value="" />
+        </el-select>
+      </el-form-item>
+  {%- elif column.html_type == 'datetime' and column.query_type != 'BETWEEN' %}
+      <el-form-item label="{{ comment }}" prop="{{ underscore(column.java_field) }}">
+        <el-date-picker clearable
+          v-model="queryParams.{{ underscore(column.java_field) }}"
+          type="date"
+          value-format="yyyy-MM-dd"
+          placeholder="选择{{ comment }}">
+        </el-date-picker>
+      </el-form-item>
+  {%- elif column.html_type == 'datetime' and column.query_type == 'BETWEEN' %}
+      <el-form-item label="{{ comment }}">
         <el-date-picker
-          v-model="daterange{{ column.java_field }}"
+          v-model="daterange{{ attr_name }}"
+          style="width: 240px"
           value-format="yyyy-MM-dd"
           type="daterange"
           range-separator="-"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
         ></el-date-picker>
-  {% endif %}
       </el-form-item>
-{% endif %}
-{% endfor %}
+  {%- endif %}
+{%- endif %}
+{%- endfor %}
       <el-form-item>
         <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
         <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
@@ -72,43 +96,80 @@
       v-if="refreshTable"
       v-loading="loading"
       :data="{{ table.business_name }}List"
-      row-key="{{ table.tree_code }}"
+      row-key="{% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %}"
       :default-expand-all="isExpandAll"
       :tree-props="{children: 'children', hasChildren: 'hasChildren'}"
     >
-{% set index = 0 %}
-{% for column in table.columns %}
-{% if column.is_list %}
-  {% if column.is_pk %}
-  {% elif column.html_type == 'datetime' %}
-      <el-table-column label="{{ column.column_comment }}" align="center" v-if="columns[{{ index }}].visible" prop="{{ underscore(column.java_field) }}" width="180">
+{%- for column in table.columns %}
+{%- set java_field = column.java_field %}
+{%- set comment = column.column_comment %}
+{%- if '(' in comment or '（' in comment %}
+{%- if '(' in comment %}
+{%- set comment = comment.split('(')[0] %}
+{%- elif '（' in comment %}
+{%- set comment = comment.split('（')[0] %}
+{%- endif %}
+{%- endif %}
+  {%- if column.is_pk == '1' %}
+  {%- elif column.is_list and column.list_index is not none and column.html_type == 'datetime' %}
+      <el-table-column label="{{ comment }}" align="center" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(java_field) }}" width="180">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.{{ underscore(column.java_field) }}, '{y}-{m}-{d}') }}</span>
+          <span>{{ "{{ parseTime(scope.row." }}{{ underscore(java_field) }}{{ ", '{y}-{m}-{d}') }}" }}</span>
         </template>
       </el-table-column>
-  {% elif column.html_type == 'imageUpload' %}
-      <el-table-column label="{{ column.column_comment }}" align="center" v-if="columns[{{ index }}].visible" prop="{{ underscore(column.java_field) }}" width="100">
+  {%- elif column.is_list and column.list_index is not none and column.html_type == 'imageUpload' %}
+      <el-table-column label="{{ comment }}" align="center" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(java_field) }}" width="100">
         <template slot-scope="scope">
-          <image-preview :src="scope.row.{{ underscore(column.java_field) }}" :width="50" :height="50"/>
+          <image-preview :src="scope.row.{{ underscore(java_field) }}" :width="50" :height="50"/>
         </template>
       </el-table-column>
-  {% elif column.dict_type != '' %}
-      <el-table-column label="{{ column.column_comment }}" align="center" v-if="columns[{{ index }}].visible" prop="{{ underscore(column.java_field) }}">
+  {%- elif column.is_list and column.list_index is not none and column.html_type == 'fileUpload' %}
+      <el-table-column label="{{ comment }}" align="center" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(java_field) }}" width="100">
         <template slot-scope="scope">
-    {% if column.html_type == 'checkbox' %}
-          <dict-tag :options="dict.type.{{ getColumnDictType(column) }}" :value="scope.row.{{ underscore(column.java_field) }} ? scope.row.{{ underscore(column.java_field) }}.split(',') : []"/>
-    {% else %}
-          <dict-tag :options="dict.type.{{ getColumnDictType(column) }}" :value="scope.row.{{ underscore(column.java_field) }}"/>
-    {% endif %}
+          <div v-if="scope.row.{{ underscore(java_field) }}">
+            <el-tooltip placement="top" effect="light">
+              <div slot="content">
+                  <div v-for="(file,index) in scope.row.{{ underscore(java_field) }}.split(',')"
+                       :key="index"
+                       style="text-align: left;padding: 5px;">
+                    <el-link
+                       :download="getFileName(file)"
+                       :href="getFilePath(file)"
+                       :underline="false"
+                       target="_blank"
+                       style="font-size: 14px"
+                    >
+                    <span style="cursor: pointer;"> {{ "{{ getFileName(file) }}" }} </span>
+                  </el-link>
+                  </div>
+              </div>
+              <span style="cursor: pointer; color: #409EFF;">查看文件</span>
+            </el-tooltip>
+          </div>
+          <div v-else>
+            -
+          </div>
         </template>
       </el-table-column>
-  {% else %}
-      <el-table-column label="{{ column.column_comment }}" align="center" :show-overflow-tooltip="true" v-if="columns[{{ index }}].visible" prop="{{ underscore(column.java_field) }}" />
-  {% endif %}
-  {% set index = index + 1 %}
-{% endif %}
-{% endfor %}
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" fixed="right">
+  {%- elif column.is_list and column.list_index is not none and column.dict_type and column.dict_type != '' %}
+      <el-table-column label="{{ comment }}" align="center" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(java_field) }}">
+        <template slot-scope="scope">
+  {%- if column.html_type == 'checkbox' %}
+          <dict-tag :options="dict.type.{{ column.dict_type }}" :value="scope.row.{{ underscore(java_field) }} ? scope.row.{{ underscore(java_field) }}.split(',') : []"/>
+  {%- else %}
+          <dict-tag :options="dict.type.{{ column.dict_type }}" :value="scope.row.{{ underscore(java_field) }}"/>
+  {%- endif %}
+        </template>
+      </el-table-column>
+  {%- elif column.is_list and column.list_index is not none and java_field %}
+  {%- if column.list_index == 0 %}
+      <el-table-column label="{{ comment }}" :show-overflow-tooltip="true" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(java_field) }}" />
+  {%- else %}
+      <el-table-column label="{{ comment }}" align="center" :show-overflow-tooltip="true" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(java_field) }}" />
+  {%- endif %}
+  {%- endif %}
+{%- endfor %}
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
           <el-button
             size="mini"
@@ -138,63 +199,112 @@
     <!-- 添加或修改{{ table.function_name }}对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
-{% for column in table.columns %}
-{% if column.is_insert and not column.is_pk %}
-        <el-form-item label="{{ column.column_comment }}" prop="{{ underscore(column.java_field) }}">
-  {% if table.tree_parent_code != '' and column.java_field == table.tree_parent_code %}
-          <treeselect v-model="form.{{ underscore(table.tree_parent_code) }}" :options="{{ table.business_name }}Options" :normalizer="normalizer" placeholder="请选择{{ column.column_comment }}" />
-  {% elif column.html_type == 'input' %}
-          <el-input v-model="form.{{ underscore(column.java_field) }}" placeholder="请输入{{ column.column_comment }}" />
-  {% elif column.html_type == 'textarea' %}
-          <el-input v-model="form.{{ underscore(column.java_field) }}" type="textarea" placeholder="请输入内容" />
-  {% elif column.html_type == 'select' %}
-          <el-select v-model="form.{{ underscore(column.java_field) }}" placeholder="请选择{{ column.column_comment }}">
+{%- for column in table.columns %}
+{%- set field = column.java_field %}
+{%- if column.is_insert and column.is_pk != '1' %}
+{%- set comment = column.column_comment %}
+{%- if '(' in comment or '（' in comment %}
+{%- if '(' in comment %}
+{%- set comment = comment.split('(')[0] %}
+{%- elif '（' in comment %}
+{%- set comment = comment.split('（')[0] %}
+{%- endif %}
+{%- endif %}
+{%- set dict_type = column.dict_type if column.dict_type else '' %}
+  {%- if table.tree_parent_code and (underscore(column.java_field) == underscore(table.tree_parent_code) or column.java_field == table.tree_parent_code) %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(table.tree_parent_code) }}">
+          <treeselect v-model="form.{{ underscore(table.tree_parent_code) }}" :options="{{ table.business_name }}Options" :normalizer="normalizer" placeholder="请选择{{ comment }}" />
+        </el-form-item>
+  {%- elif column.html_type == 'input' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-input v-model="form.{{ underscore(field) }}" placeholder="请输入{{ comment }}" />
+        </el-form-item>
+  {%- elif column.html_type == 'imageUpload' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <image-upload v-model="form.{{ underscore(field) }}"/>
+        </el-form-item>
+  {%- elif column.html_type == 'fileUpload' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <file-upload v-model="form.{{ underscore(field) }}"/>
+        </el-form-item>
+  {%- elif column.html_type == 'editor' %}
+        <el-form-item label="{{ comment }}">
+          <editor v-model="form.{{ underscore(field) }}" :min-height="192"/>
+        </el-form-item>
+  {%- elif column.html_type == 'select' and dict_type != '' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-select v-model="form.{{ underscore(field) }}" placeholder="请选择{{ comment }}">
             <el-option
-              v-for="dict in {{ getColumnDictType(column) }}Options"
+              v-for="dict in dict.type.{{ dict_type }}"
               :key="dict.value"
               :label="dict.label"
-    {% if column.java_type == 'Integer' or column.java_type == 'Long' %}
+  {%- if column.java_type == 'Integer' or column.java_type == 'Long' %}
               :value="parseInt(dict.value)"
-    {% else %}
+  {%- else %}
               :value="dict.value"
-    {% endif %}
+  {%- endif %}
             ></el-option>
           </el-select>
-  {% elif column.html_type == 'radio' %}
-          <el-radio-group v-model="form.{{ underscore(column.java_field) }}">
-            <el-radio
-              v-for="dict in {{ getColumnDictType(column) }}Options"
-              :key="dict.value"
-    {% if column.java_type == 'Integer' or column.java_type == 'Long' %}
-              :label="parseInt(dict.value)"
-    {% else %}
-              :label="dict.value"
-    {% endif %}
-            >{{ dict.label }}</el-radio>
-          </el-radio-group>
-  {% elif column.html_type == 'checkbox' %}
-          <el-checkbox-group v-model="form.{{ underscore(column.java_field) }}">
+        </el-form-item>
+  {%- elif column.html_type == 'select' and dict_type == '' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-select v-model="form.{{ underscore(field) }}" placeholder="请选择{{ comment }}">
+            <el-option label="请选择字典生成" value="" />
+          </el-select>
+        </el-form-item>
+  {%- elif column.html_type == 'checkbox' and dict_type != '' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-checkbox-group v-model="form.{{ underscore(field) }}">
             <el-checkbox
-              v-for="dict in {{ getColumnDictType(column) }}Options"
+              v-for="dict in dict.type.{{ dict_type }}"
               :key="dict.value"
-              :label="dict.value"
-            >{{ dict.label }}</el-checkbox>
+              :label="dict.value">
+              {{ "{{dict.label}}" }}
+            </el-checkbox>
           </el-checkbox-group>
-  {% elif column.html_type == 'datetime' %}
+        </el-form-item>
+  {%- elif column.html_type == 'checkbox' and dict_type == '' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-checkbox-group v-model="form.{{ underscore(field) }}">
+            <el-checkbox>请选择字典生成</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+  {%- elif column.html_type == 'radio' and dict_type != '' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-radio-group v-model="form.{{ underscore(field) }}">
+            <el-radio
+              v-for="dict in dict.type.{{ dict_type }}"
+              :key="dict.value"
+  {%- if column.java_type == 'Integer' or column.java_type == 'Long' %}
+              :label="parseInt(dict.value)"
+  {%- else %}
+              :label="dict.value"
+  {%- endif %}
+            >{{ "{{dict.label}}" }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+  {%- elif column.html_type == 'radio' and dict_type == '' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-radio-group v-model="form.{{ underscore(field) }}">
+            <el-radio label="1">请选择字典生成</el-radio>
+          </el-radio-group>
+        </el-form-item>
+  {%- elif column.html_type == 'datetime' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
           <el-date-picker clearable
-            v-model="form.{{ underscore(column.java_field) }}"
+            v-model="form.{{ underscore(field) }}"
             type="date"
             value-format="yyyy-MM-dd"
-            placeholder="选择{{ column.column_comment }}">
+            placeholder="选择{{ comment }}">
           </el-date-picker>
-  {% elif column.html_type == 'imageUpload' %}
-          <image-upload v-model="form.{{ underscore(column.java_field) }}"/>
-  {% elif column.html_type == 'fileUpload' %}
-          <file-upload v-model="form.{{ underscore(column.java_field) }}"/>
-  {% endif %}
         </el-form-item>
-{% endif %}
-{% endfor %}
+  {%- elif column.html_type == 'textarea' %}
+        <el-form-item label="{{ comment }}" prop="{{ underscore(field) }}">
+          <el-input v-model="form.{{ underscore(field) }}" type="textarea" placeholder="请输入内容" />
+        </el-form-item>
+  {%- endif %}
+{%- endif %}
+{%- endfor %}
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" @click="submitForm">确 定</el-button>
@@ -208,17 +318,50 @@
 import { list{{ table.class_name }}, get{{ table.class_name }}, del{{ table.class_name }}, add{{ table.class_name }}, update{{ table.class_name }} } from "@/api/{{ table.module_name }}/{{ table.business_name }}";
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
-
+{%- set has_file_upload = false %}
+{%- for column in table.columns %}
+{%- if column.is_list and column.html_type == 'fileUpload' %}
+{%- set has_file_upload = true %}
+{%- endif %}
+{%- endfor %}
+{%- if has_file_upload %}
+import { getFileName, getFilePath } from '@/utils/ruoyi'
+{%- endif %}
 export default {
   name: "{{ table.class_name }}",
-{% if dicts %}
-  dicts: [{{ dicts }}],
-{% endif %}
+{%- set dicts_list = [] %}
+{%- for column in table.columns %}
+{%- if column.dict_type and column.dict_type != '' %}
+{%- if column.dict_type not in dicts_list %}
+{%- set _ = dicts_list.append(column.dict_type) %}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- if dicts_list|length > 0 %}
+  dicts: [{%- for dict_type in dicts_list %}'{{ dict_type }}'{%- if not loop.last %}, {% endif %}{%- endfor %}],
+{%- endif %}
   components: {
     Treeselect
   },
   data() {
     return {
+      //表格展示列
+      columns: [
+{%- for column in table.columns %}
+{%- set comment = column.column_comment %}
+{%- if '(' in comment or '（' in comment %}
+{%- if '(' in comment %}
+{%- set comment = comment.split('(')[0] %}
+{%- elif '（' in comment %}
+{%- set comment = comment.split('（')[0] %}
+{%- endif %}
+{%- endif %}
+  {%- if column.is_pk == '1' %}
+  {%- elif column.is_list and column.list_index is not none %}
+        { key: {{ column.list_index }}, label: '{{ comment }}', visible: true }{% if not loop.last %},{% endif %}
+  {%- endif %}
+{%- endfor %}
+      ],
       // 遮罩层
       loading: true,
       // 显示搜索条件
@@ -235,90 +378,98 @@ export default {
       isExpandAll: true,
       // 重新渲染表格状态
       refreshTable: true,
-      // 表格列信息
-      columns: [
-{% set index = 0 %}
-{% for column in table.columns %}
-{% if column.is_list and not column.is_pk %}
-        { key: {{ index }}, label: '{{ column.column_comment }}', visible: true },
-  {% set index = index + 1 %}
-{% endif %}
-{% endfor %}
-      ],
-{% for column in table.columns %}
-{% if column.dict_type != '' %}
-      // {{ column.column_comment }}字典
-      {{ getColumnDictType(column) }}Options: [],
-{% endif %}
-{% endfor %}
-{% for column in table.columns %}
-{% if column.html_type == 'datetime' %}
-      // {{ column.column_comment }}时间范围
-      daterange{{ column.java_field }}: [],
-{% endif %}
-{% endfor %}
+{%- for column in table.columns %}
+{%- if column.html_type == 'datetime' and column.query_type == 'BETWEEN' %}
+{%- set attr_name = capitalize_first(column.java_field) %}
+{%- set comment = column.column_comment %}
+{%- if '(' in comment or '（' in comment %}
+{%- if '(' in comment %}
+{%- set comment = comment.split('(')[0] %}
+{%- elif '（' in comment %}
+{%- set comment = comment.split('（')[0] %}
+{%- endif %}
+{%- endif %}
+      // {{ comment }}时间范围
+      daterange{{ attr_name }}: [],
+{%- endif %}
+{%- endfor %}
       // 查询参数
       queryParams: {
-{% for column in table.columns %}
-{% if column.is_query %}
-        {{ underscore(column.java_field) }}: null,
-{% endif %}
-{% endfor %}
+{%- set query_cols = [] %}
+{%- for column in table.columns %}
+{%- if column.is_query %}
+{%- set _ = query_cols.append(column) %}
+{%- endif %}
+{%- endfor %}
+{%- for column in query_cols %}
+        {{ underscore(column.java_field) }}: null{% if not loop.last %},{% endif %}
+{%- endfor %}
       },
       // 表单参数
       form: {},
       // 表单校验
       rules: {
-{% for column in table.columns %}
-{% if column.is_required %}
+{%- set required_cols = [] %}
+{%- for column in table.columns %}
+{%- if column.is_required == '1' %}
+{%- set _ = required_cols.append(column) %}
+{%- endif %}
+{%- endfor %}
+{%- for column in required_cols %}
+{%- set comment = column.column_comment %}
+{%- if '(' in comment or '（' in comment %}
+{%- if '(' in comment %}
+{%- set comment = comment.split('(')[0] %}
+{%- elif '（' in comment %}
+{%- set comment = comment.split('（')[0] %}
+{%- endif %}
+{%- endif %}
         {{ underscore(column.java_field) }}: [
-          { required: true, message: "{{ column.column_comment }}不能为空", trigger: {% if column.html_type == 'select' or column.html_type == 'radio' %}"change"{% else %}"blur"{% endif %} }
-        ],
-{% endif %}
-{% endfor %}
+          { required: true, message: "{{ comment }}不能为空", trigger: {% if column.html_type == 'select' or column.html_type == 'radio' %}"change"{% else %}"blur"{% endif %} }
+        ]{% if not loop.last %},{% endif %}
+{%- endfor %}
       }
     };
   },
   created() {
-{% set dictExists = false %}
-{% for column in table.columns %}
-{% if column.dict_type != '' %}
-    {% if not dictExists %}
-    this.getDicts("{{ getColumnDictType(column) }}").then(response => {
-      this.{{ getColumnDictType(column) }}Options = response.data;
-    });
-    {% set dictExists = true %}
-    {% endif %}
-{% endif %}
-{% endfor %}
     this.getList();
   },
   methods: {
     /** 查询{{ table.function_name }}列表 */
     getList() {
       this.loading = true;
-{% for column in table.columns %}
-{% if column.html_type == 'datetime' %}
+{%- set has_datetime_between = false %}
+{%- for column in table.columns %}
+{%- if column.html_type == 'datetime' and column.query_type == 'BETWEEN' %}
+{%- if not has_datetime_between %}
       this.queryParams.params = {};
-      if (null != this.daterange{{ column.java_field }} && '' != this.daterange{{ column.java_field }}.toString()) {
-        this.queryParams.params["begin{{ column.java_field }}"] = this.daterange{{ column.java_field }}[0];
-        this.queryParams.params["end{{ column.java_field }}"] = this.daterange{{ column.java_field }}[1];
+{%- set has_datetime_between = true %}
+{%- endif %}
+{%- set attr_name = capitalize_first(column.java_field) %}
+      if (null != this.daterange{{ attr_name }} && '' != this.daterange{{ attr_name }}) {
+        this.queryParams.params["begin{{ attr_name }}"] = this.daterange{{ attr_name }}[0];
+        this.queryParams.params["end{{ attr_name }}"] = this.daterange{{ attr_name }}[1];
       }
-{% endif %}
-{% endfor %}
+{%- endif %}
+{%- endfor %}
       list{{ table.class_name }}(this.queryParams).then(response => {
-        this.{{ table.business_name }}List = this.handleTree(response.data, "{{ table.tree_code }}", "{{ table.tree_parent_code }}");
+        const list = Array.isArray(response && response.data) ? response.data : (Array.isArray(response && response.rows) ? response.rows : []);
+        this.{{ table.business_name }}List = this.handleTree(list, "{% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %}", "{% if table.tree_parent_code %}{{ table.tree_parent_code }}{% else %}parent_id{% endif %}");
         this.loading = false;
       });
     },
+{%- if has_file_upload %}
+    getFilePath,
+    getFileName,
+{%- endif %}
     /** 转换{{ table.function_name }}数据结构 */
     normalizer(node) {
       if (node.children && !node.children.length) {
         delete node.children;
       }
       return {
-        id: node.{{ table.tree_code }},
-        label: node.{{ table.tree_name }},
+        id: node.{% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %},
+        label: node.{% if table.tree_name %}{{ table.tree_name }}{% else %}name{% endif %},
         children: node.children
       };
     },
@@ -326,8 +477,9 @@ export default {
     getTreeselect() {
       list{{ table.class_name }}().then(response => {
         this.{{ table.business_name }}Options = [];
-        const data = { {{ table.tree_code }}: 0, {{ table.tree_name }}: '顶级节点', children: [] };
-        data.children = this.handleTree(response.data, "{{ table.tree_code }}", "{{ table.tree_parent_code }}");
+        const data = { {% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %}: 0, {% if table.tree_name %}{{ table.tree_name }}{% else %}name{% endif %}: '顶级节点', children: [] };
+        const list = Array.isArray(response && response.data) ? response.data : (Array.isArray(response && response.rows) ? response.rows : []);
+        data.children = this.handleTree(list, "{% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %}", "{% if table.tree_parent_code %}{{ table.tree_parent_code }}{% else %}parent_id{% endif %}");
         this.{{ table.business_name }}Options.push(data);
       });
     },
@@ -339,13 +491,13 @@ export default {
     // 表单重置
     reset() {
       this.form = {
-{% for column in table.columns %}
-  {% if column.html_type == 'checkbox' %}
-        {{ underscore(column.java_field) }}: [],
-  {% else %}
-        {{ underscore(column.java_field) }}: null,
-  {% endif %}
-{% endfor %}
+{%- for column in table.columns %}
+  {%- if column.html_type == 'checkbox' %}
+        {{ underscore(column.java_field) }}: []
+  {%- else %}
+        {{ underscore(column.java_field) }}: null
+  {%- endif %}{% if not loop.last %},{% endif %}
+{%- endfor %}
       };
       this.resetForm("form");
     },
@@ -355,11 +507,12 @@ export default {
     },
     /** 重置按钮操作 */
     resetQuery() {
-{% for column in table.columns %}
-{% if column.html_type == 'datetime' %}
-      this.daterange{{ column.java_field }} = [];
-{% endif %}
-{% endfor %}
+{%- for column in table.columns %}
+{%- if column.html_type == 'datetime' and column.query_type == 'BETWEEN' %}
+{%- set attr_name = capitalize_first(column.java_field) %}
+      this.daterange{{ attr_name }} = [];
+{%- endif %}
+{%- endfor %}
       this.resetForm("queryForm");
       this.handleQuery();
     },
@@ -367,10 +520,10 @@ export default {
     handleAdd(row) {
       this.reset();
       this.getTreeselect();
-      if (row != null && row.{{ table.tree_code }}) {
-        this.form.{{ underscore(table.tree_parent_code) }} = row.{{ table.tree_code }};
+      if (row != null && row.{% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %}) {
+        this.form.{% if table.tree_parent_code %}{{ underscore(table.tree_parent_code) }}{% else %}parent_id{% endif %} = row.{% if table.tree_code %}{{ table.tree_code }}{% else %}id{% endif %};
       } else {
-        this.form.{{ underscore(table.tree_parent_code) }} = 0;
+        this.form.{% if table.tree_parent_code %}{{ underscore(table.tree_parent_code) }}{% else %}parent_id{% endif %} = 0;
       }
       this.open = true;
       this.title = "添加{{ table.function_name }}";
@@ -388,15 +541,15 @@ export default {
       this.reset();
       this.getTreeselect();
       if (row != null) {
-        this.form.{{ underscore(table.tree_parent_code) }} = row.{{ underscore(table.tree_parent_code) }};
+        this.form.{% if table.tree_parent_code %}{{ underscore(table.tree_parent_code) }}{% else %}parent_id{% endif %} = row.{% if table.tree_parent_code %}{{ underscore(table.tree_parent_code) }}{% else %}parent_id{% endif %};
       }
-      get{{ table.class_name }}(row.{{ underscore(table.pk_column.java_field) }}).then(response => {
+      get{{ table.class_name }}(row.{% if table.pk_column %}{{ underscore(table.pk_column.java_field) }}{% else %}id{% endif %}).then(response => {
         this.form = response.data;
-{% for column in table.columns %}
-{% if column.html_type == 'checkbox' %}
+{%- for column in table.columns %}
+{%- if column.html_type == 'checkbox' %}
         this.form.{{ underscore(column.java_field) }} = this.form.{{ underscore(column.java_field) }}.split(",");
-{% endif %}
-{% endfor %}
+{%- endif %}
+{%- endfor %}
         this.open = true;
         this.title = "修改{{ table.function_name }}";
       });
@@ -405,12 +558,12 @@ export default {
     submitForm() {
       this.$refs["form"].validate(valid => {
         if (valid) {
-{% for column in table.columns %}
-{% if column.html_type == 'checkbox' %}
+{%- for column in table.columns %}
+{%- if column.html_type == 'checkbox' %}
           this.form.{{ underscore(column.java_field) }} = this.form.{{ underscore(column.java_field) }}.join(",");
-{% endif %}
-{% endfor %}
-          if (this.form.{{ underscore(table.pk_column.java_field) }} != null) {
+{%- endif %}
+{%- endfor %}
+          if (this.form.{% if table.pk_column %}{{ underscore(table.pk_column.java_field) }}{% else %}id{% endif %} != null) {
             update{{ table.class_name }}(this.form).then(response => {
               this.$modal.msgSuccess("修改成功");
               this.open = false;
@@ -428,8 +581,8 @@ export default {
     },
     /** 删除按钮操作 */
     handleDelete(row) {
-      this.$modal.confirm('是否确认删除{{ table.function_name }}编号为"' + row.{{ underscore(table.pk_column.java_field) }} + '"的数据项？').then(function() {
-        return del{{ table.class_name }}(row.{{ underscore(table.pk_column.java_field) }});
+      this.$modal.confirm('是否确认删除{{ table.function_name }}编号为"' + row.{% if table.pk_column %}{{ underscore(table.pk_column.java_field) }}{% else %}id{% endif %} + '"的数据项？').then(function() {
+        return del{{ table.class_name }}(row.{% if table.pk_column %}{{ underscore(table.pk_column.java_field) }}{% else %}id{% endif %});
       }).then(() => {
         this.getList();
         this.$modal.msgSuccess("删除成功");

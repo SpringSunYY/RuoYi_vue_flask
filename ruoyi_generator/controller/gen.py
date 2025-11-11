@@ -131,7 +131,7 @@ def update_gen_table(dto: GenTablePO):
         if hasattr(gen_table, attr):
             setattr(gen_table, attr, getattr(dto, attr))
     
-    # 处理 options 字段和 parentMenuId
+    # 处理 options 字段（包含树配置与菜单父节点）和 parentMenuId
     import json
     options_dict = {}
     
@@ -146,19 +146,33 @@ def update_gen_table(dto: GenTablePO):
             print(f"解析 options 字段出错: {e}")
             options_dict = {}
     
-    # 检查 params 中是否有 parentMenuId（前端可能通过 params 传递）
+    # 合并树配置（来自 dto 的 treeCode/treeParentCode/treeName）
+    # 兼容：如果前端把树配置直接放在 dto 顶层，则这里写入 options
+    if getattr(dto, 'tree_code', None):
+        options_dict['treeCode'] = dto.tree_code
+    if getattr(dto, 'tree_parent_code', None):
+        options_dict['treeParentCode'] = dto.tree_parent_code
+    if getattr(dto, 'tree_name', None):
+        options_dict['treeName'] = dto.tree_name
+
+    # 检查 params 中是否有 parentMenuId 或树配置（部分前端可能通过 params 传递）
     if hasattr(dto, 'params') and dto.params:
-        if isinstance(dto.params, dict) and 'parentMenuId' in dto.params:
-            options_dict['parentMenuId'] = dto.params.get('parentMenuId')
+        if isinstance(dto.params, dict):
+            if 'parentMenuId' in dto.params:
+                options_dict['parentMenuId'] = dto.params.get('parentMenuId')
+            if 'treeCode' in dto.params:
+                options_dict['treeCode'] = dto.params.get('treeCode')
+            if 'treeParentCode' in dto.params:
+                options_dict['treeParentCode'] = dto.params.get('treeParentCode')
+            if 'treeName' in dto.params:
+                options_dict['treeName'] = dto.params.get('treeName')
     
-    # 如果 options_dict 中有 parentMenuId，更新 options 字段
-    if 'parentMenuId' in options_dict:
+    # 更新 options 字段（无论是否包含 parentMenuId，都要保存）
+    if options_dict is not None:
         gen_table.options = json.dumps(options_dict, ensure_ascii=False)
-        gen_table.parent_menu_id = options_dict.get('parentMenuId')
-        print(f"设置 parentMenuId: {options_dict.get('parentMenuId')}, options: {gen_table.options}")
-    elif options_dict:
-        # 即使没有 parentMenuId，也要保存其他 options
-        gen_table.options = json.dumps(options_dict, ensure_ascii=False)
+        if 'parentMenuId' in options_dict:
+            gen_table.parent_menu_id = options_dict.get('parentMenuId')
+            print(f"设置 parentMenuId: {options_dict.get('parentMenuId')}, options: {gen_table.options}")
 
     # 特别处理columns字段
     if hasattr(dto, 'columns') and dto.columns is not None:
