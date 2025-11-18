@@ -6,27 +6,27 @@
 from typing import List, Tuple
 
 from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
-from {{ get_import_path(table.package_name, table.module_name, 'mapper') }}.{{ underscore(table.class_name) }}_mapper import {{ table.class_name }}Mapper
+from {{ get_import_path(table.package_name, table.module_name, 'mapper') }}.{{ underscore(table.class_name) }}_mapper import {{ underscore(table.class_name) }}_mapper
 
-class {{ table.class_name }}Service:
+class {{ underscore(table.class_name) }}_service:
     """{{ table.function_name }}服务类"""
 
-    def select_{{ table.business_name }}_list(self, {{ table.business_name }}: {{ table.class_name }}) -> Tuple[List[{{ table.class_name }}], int]:
+    def select_{{ underscore(table.class_name) }}_list(self, {{ underscore(table.business_name) }}: {{ table.class_name }}) -> Tuple[List[{{ table.class_name }}], int]:
         """
         查询{{ table.function_name }}列表
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             Tuple[List[{{ table.class_name }}], int]: {{ table.function_name }}列表和总数
         """
-        list_result = {{ table.class_name }}Mapper.select_list({{ table.business_name }})
-        count_result = {{ table.class_name }}Mapper.select_count({{ table.business_name }})
+        list_result = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_list({{ underscore(table.business_name) }})
+        count_result = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_count({{ underscore(table.business_name) }})
         return list_result, count_result
 
     {% if table.pk_column %}
-    def select_{{ table.business_name }}_by_id(self, {{ underscore(table.pk_column.java_field) }}: int) -> {{ table.class_name }}:
+    def select_{{ underscore(table.class_name) }}_by_id(self, {{ underscore(table.pk_column.java_field) }}: int) -> {{ table.class_name }}:
         """
         根据ID查询{{ table.function_name }}
 
@@ -36,37 +36,37 @@ class {{ table.class_name }}Service:
         Returns:
             {{ table.class_name }}: {{ table.function_name }}对象
         """
-        return {{ table.class_name }}Mapper.select_by_id({{ underscore(table.pk_column.java_field) }})
+        return {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.pk_column.java_field) }})
     {% endif %}
 
-    def insert_{{ table.business_name }}(self, {{ table.business_name }}: {{ table.class_name }}) -> int:
+    def insert_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}: {{ table.class_name }}) -> int:
         """
         新增{{ table.function_name }}
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             int: 插入的记录数
         """
-        return {{ table.class_name }}Mapper.insert({{ table.business_name }})
+        return {{ underscore(table.class_name) }}_mapper.insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
 
     {% if table.pk_column %}
-    def update_{{ table.business_name }}(self, {{ table.business_name }}: {{ table.class_name }}) -> int:
+    def update_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}: {{ table.class_name }}) -> int:
         """
         修改{{ table.function_name }}
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             int: 更新的记录数
         """
-        return {{ table.class_name }}Mapper.update({{ table.business_name }})
+        return {{ underscore(table.class_name) }}_mapper.update_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
     {% endif %}
 
     {% if table.pk_column %}
-    def delete_{{ table.business_name }}_by_ids(self, ids: List[int]) -> int:
+    def delete_{{ underscore(table.class_name) }}_by_ids(self, ids: List[int]) -> int:
         """
         批量删除{{ table.function_name }}
 
@@ -76,36 +76,36 @@ class {{ table.class_name }}Service:
         Returns:
             int: 删除的记录数
         """
-        return {{ table.class_name }}Mapper.delete_by_ids(ids)
+        return {{ underscore(table.class_name) }}_mapper.delete_{{ underscore(table.class_name) }}_by_ids(ids)
     {% endif %}
 
-    def import_{{ table.business_name }}(self, {{ table.business_name }}_list: List[{{ table.class_name }}], update_support: bool = False) -> str:
+    def import_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}_list: List[{{ table.class_name }}], update_support: bool = False) -> str:
         """
         导入{{ table.function_name }}数据
 
         Args:
-            {{ table.business_name }}_list (List[{{ table.class_name }}]): {{ table.function_name }}列表
+            {{ underscore(table.business_name) }}_list (List[{{ table.class_name }}]): {{ table.function_name }}列表
             update_support (bool): 是否更新已存在的数据
 
         Returns:
             str: 导入结果消息
         """
-        if not {{ table.business_name }}_list:
+        if not {{ underscore(table.business_name) }}_list:
             raise Exception("导入{{ table.function_name }}数据不能为空")
         
         success_count = 0
         failure_count = 0
         failure_msg = []
         
-        for index, {{ table.business_name }} in enumerate({{ table.business_name }}_list):
+        for index, {{ underscore(table.business_name) }} in enumerate({{ underscore(table.business_name) }}_list):
             try:
                 {% if table.pk_column %}
                 # 检查是否已存在
-                existing = {{ table.class_name }}Mapper.select_by_id({{ table.business_name }}.{{ underscore(table.pk_column.java_field) }})
+                existing = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.business_name) }}.{{ underscore(table.pk_column.java_field) }})
                 if existing:
                     if update_support:
                         # 更新数据
-                        result = {{ table.class_name }}Mapper.update({{ table.business_name }})
+                        result = {{ underscore(table.class_name) }}_mapper.update_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
                         if result > 0:
                             success_count += 1
                         else:
@@ -116,7 +116,7 @@ class {{ table.class_name }}Service:
                         failure_msg.append(f"第{index + 2}行数据已存在")
                 else:
                     # 新增数据
-                    result = {{ table.class_name }}Mapper.insert({{ table.business_name }})
+                    result = {{ underscore(table.class_name) }}_mapper.insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
                     if result > 0:
                         success_count += 1
                     else:
@@ -124,7 +124,7 @@ class {{ table.class_name }}Service:
                         failure_msg.append(f"第{index + 2}行导入失败")
                 {% else %}
                 # 没有主键，直接插入
-                result = {{ table.class_name }}Mapper.insert({{ table.business_name }})
+                result = {{ underscore(table.class_name) }}_mapper.insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
                 if result > 0:
                     success_count += 1
                 else:

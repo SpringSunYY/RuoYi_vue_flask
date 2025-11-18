@@ -309,13 +309,11 @@
 </template>
 
 <script>
-{# 使用后端工具函数生成接口前缀：
-   - apiName  : scheduleInfo
-   - ApiName  : ScheduleInfo（listScheduleInfo / getScheduleInfo 等） #}
 {% set apiName = to_camel_case(table.class_name, False) %}
 {% set ApiName = capitalize_first(apiName) %}
 import { list{{ ApiName }}, get{{ ApiName }}, del{{ ApiName }}, add{{ ApiName }}, update{{ ApiName }}, export{{ ApiName }}, importTemplate, importData } from "@/api/{{ table.module_name }}/{{ table.business_name }}";
 import { getToken } from "@/utils/auth";
+import { getFileName, getFilePath } from '@/utils/ruoyi'
 
 export default {
   name: "{{ table.class_name }}",

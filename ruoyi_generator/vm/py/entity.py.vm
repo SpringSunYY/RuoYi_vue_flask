@@ -3,10 +3,11 @@
 # @FileName: {{ table.class_name }}.py
 # @Time    : {{ datetime }}
 
-from typing import Optional
+from typing import Optional, Annotated
 from datetime import datetime
-from pydantic import Field
+from pydantic import Field, BeforeValidator
 from ruoyi_common.base.model import BaseEntity
+from ruoyi_common.base.transformer import to_datetime
 
 class {{ table.class_name }}(BaseEntity):
     """
@@ -30,9 +31,13 @@ class {{ table.class_name }}(BaseEntity):
     {{ underscore(column.java_field) }}: Optional[bool] = Field(default=None, description="{{ column.column_comment }}")
 {%- elif column.java_type == 'Date' or column.java_type == 'DateTime' %}
     # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[datetime] = Field(default=None, description="{{ column.column_comment }}")
+    {{ underscore(column.java_field) }}: Annotated[Optional[datetime], BeforeValidator(to_datetime())] = Field(default=None, description="{{ column.column_comment }}")
 {%- else %}
     # {{ column.column_comment }}
     {{ underscore(column.java_field) }}: Optional[str] = Field(default=None, description="{{ column.column_comment }}")
 {%- endif %}
 {%- endfor %}
+    # 页码
+    page_num: Optional[int] = Field(default=1, description="页码")
+    # 每页数量
+    page_size: Optional[int] = Field(default=10, description="每页数量")

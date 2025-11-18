@@ -23,16 +23,21 @@ def ids_to_list(value:str) -> Optional[List[int]]:
     return [int(i) for i in value.split(',')]
 
 
-def to_datetime(format=DateUtil.YYYY_MM_DD_HH_MM_SS) \
-        -> Callable[[str|NoneType, ValidationInfo], datetime|NoneType]:
+def to_datetime(format=None) -> Callable[[str | NoneType, ValidationInfo], datetime | NoneType]:
     """
     根据指定格式，验证datetime
 
     Args:
         format (str): 日期格式. Defaults to '%Y-%m-%d %H:%M:%S'.
     """
-    def validate_datetime(value:str|NoneType, info:ValidationInfo) \
-            -> datetime|NoneType:
+    if format is None:
+        formats: List[str] = [DateUtil.YYYY_MM_DD_HH_MM_SS, DateUtil.YYYY_MM_DD]
+    elif isinstance(format, (list, tuple, set)):
+        formats = list(format)
+    else:
+        formats = [format]
+
+    def validate_datetime(value: str | NoneType, info: ValidationInfo) -> datetime | NoneType:
         """
         验证datetime
 
@@ -46,14 +51,18 @@ def to_datetime(format=DateUtil.YYYY_MM_DD_HH_MM_SS) \
         Returns:
             _type_: datetime
         """
-        if value:
-            if isinstance(value, str):
-                return datetime.strptime(value, format)
-            elif isinstance(value, datetime):
-                return value
-            raise ValueError(f"Invalid datetime format: {value}")
-        else:
+        if not value:
             return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            for fmt in formats:
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+            raise ValueError(f"time data '{value}' does not match formats: {formats}")
+        raise ValueError(f"Invalid datetime format: {value}")
     return validate_datetime
 
 

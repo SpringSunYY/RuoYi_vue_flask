@@ -1,3 +1,4 @@
+{%- set is_tree = table.tpl_category == 'tree' %}
 from flask import request
 
 from ruoyi_common.base.model import AjaxResponse, TableResponse
@@ -9,35 +10,43 @@ from ruoyi_framework.descriptor.permission import HasPerm, PreAuthorize
 from {{ get_import_path(table.package_name, table.module_name, 'controller') }} import {{ underscore(table.class_name) }} as {{ underscore(table.class_name) }}_bp
 from {{ get_import_path(table.package_name, table.module_name, 'domain', table.class_name) }} import {{ underscore(table.class_name) }}_po
 from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
-from {{ get_import_path(table.package_name, table.module_name, 'service') }}.{{ underscore(table.class_name) }}_service import {{ table.class_name }}Service
+from {{ get_import_path(table.package_name, table.module_name, 'service') }}.{{ underscore(table.class_name) }}_service import {{ underscore(table.class_name) }}_service as {{ underscore(table.class_name) }}_service_class
 
 # 使用 controller/__init__.py 中定义的蓝图
 gen = {{ underscore(table.class_name) }}_bp
 
-{{ table.class_name|lower }}_service = {{ table.class_name }}Service()
+{{ underscore(table.class_name) }}_service = {{ underscore(table.class_name) }}_service_class()
 
 @gen.route('/list', methods=["GET"])
+{%- if is_tree %}
+@QueryValidator()
+{%- else %}
 @QueryValidator(is_page=True)
+{%- endif %}
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:list'))
 @JsonSerializer()
-def {{ table.business_name }}_list(dto: {{ underscore(table.class_name) }}_po):
+def {{ underscore(table.business_name) }}_list(dto: {{ table.class_name }}):
     """查询{{ table.function_name }}列表"""
     {{ underscore(table.class_name) }}_entity = {{ table.class_name }}()
     # 转换PO到Entity对象
     for attr in dto.model_fields.keys():
         if hasattr({{ underscore(table.class_name) }}_entity, attr):
             setattr({{ underscore(table.class_name) }}_entity, attr, getattr(dto, attr))
-    {{ table.business_name }}s, total = {{ table.class_name|lower }}_service.select_{{ table.business_name }}_list({{ underscore(table.class_name) }}_entity)
-    return TableResponse(code=HttpStatus.SUCCESS, msg='查询成功', rows={{ table.business_name }}s, total=total)
+{%- if is_tree %}
+    {{ underscore(table.class_name) }}_entity.page_num = None
+    {{ underscore(table.class_name) }}_entity.page_size = None
+{%- endif %}
+    {{ underscore(table.business_name) }}s, total = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_list({{ underscore(table.class_name) }}_entity)
+    return TableResponse(code=HttpStatus.SUCCESS, msg='查询成功', rows={{ underscore(table.business_name) }}s, total=total)
 
 {% if table.pk_column %}
 @gen.route('/<int:{{ underscore(table.pk_column.java_field) }}>', methods=['GET'])
 @PathValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:query'))
 @JsonSerializer()
-def get_{{ table.business_name }}({{ underscore(table.pk_column.java_field) }}: int):
+def get_{{ underscore(table.business_name) }}({{ underscore(table.pk_column.java_field) }}: int):
     """获取{{ table.function_name }}详细信息"""
-    {{ underscore(table.class_name) }}_entity = {{ table.class_name|lower }}_service.select_{{ table.business_name }}_by_id({{ underscore(table.pk_column.java_field) }})
+    {{ underscore(table.class_name) }}_entity = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.pk_column.java_field) }})
     return AjaxResponse.from_success(data={{ underscore(table.class_name) }}_entity)
 {% endif %}
 
@@ -45,30 +54,34 @@ def get_{{ table.business_name }}({{ underscore(table.pk_column.java_field) }}: 
 @BodyValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:add'))
 @JsonSerializer()
-def add_{{ table.business_name }}(dto: {{ underscore(table.class_name) }}_po):
+def add_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     """新增{{ table.function_name }}"""
     {{ underscore(table.class_name) }}_entity = {{ table.class_name }}()
     # 转换PO到Entity对象
     for attr in dto.model_fields.keys():
         if hasattr({{ underscore(table.class_name) }}_entity, attr):
             setattr({{ underscore(table.class_name) }}_entity, attr, getattr(dto, attr))
-    result = {{ table.class_name|lower }}_service.insert_{{ table.business_name }}({{ underscore(table.class_name) }}_entity)
-    return AjaxResponse.from_success(msg='新增成功' if result > 0 else '新增失败')
+    result = {{ underscore(table.class_name) }}_service.insert_{{ underscore(table.class_name) }}({{ underscore(table.class_name) }}_entity)
+    if result > 0:
+        return AjaxResponse.from_success(msg='新增成功')
+    return AjaxResponse.from_error(code=HttpStatus.ERROR, msg='新增失败')
 
 {% if table.pk_column %}
 @gen.route('', methods=['PUT'])
 @BodyValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:edit'))
 @JsonSerializer()
-def update_{{ table.business_name }}(dto: {{ underscore(table.class_name) }}_po):
+def update_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     """修改{{ table.function_name }}"""
     {{ underscore(table.class_name) }}_entity = {{ table.class_name }}()
     # 转换PO到Entity对象
     for attr in dto.model_fields.keys():
         if hasattr({{ underscore(table.class_name) }}_entity, attr):
             setattr({{ underscore(table.class_name) }}_entity, attr, getattr(dto, attr))
-    result = {{ table.class_name|lower }}_service.update_{{ table.business_name }}({{ underscore(table.class_name) }}_entity)
-    return AjaxResponse.from_success(msg='修改成功' if result > 0 else '修改失败')
+    result = {{ underscore(table.class_name) }}_service.update_{{ underscore(table.class_name) }}({{ underscore(table.class_name) }}_entity)
+    if result > 0:
+        return AjaxResponse.from_success(msg='修改成功')
+    return AjaxResponse.from_error(code=HttpStatus.ERROR, msg='修改失败')
 {% endif %}
 
 {% if table.pk_column %}
@@ -76,12 +89,14 @@ def update_{{ table.business_name }}(dto: {{ underscore(table.class_name) }}_po)
 @PathValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:remove'))
 @JsonSerializer()
-def delete_{{ table.business_name }}(ids: str):
+def delete_{{ underscore(table.business_name) }}(ids: str):
     """删除{{ table.function_name }}"""
     try:
         id_list = [int(id) for id in ids.split(',')]
-        result = {{ table.class_name|lower }}_service.delete_{{ table.business_name }}_by_ids(id_list)
-        return AjaxResponse.from_success(msg='删除成功' if result > 0 else '删除失败')
+        result = {{ underscore(table.class_name) }}_service.delete_{{ underscore(table.class_name) }}_by_ids(id_list)
+        if result > 0:
+            return AjaxResponse.from_success(msg='删除成功')
+        return AjaxResponse.from_error(code=HttpStatus.ERROR, msg='删除失败')
     except Exception as e:
         return AjaxResponse.from_error(msg=f'删除失败: {str(e)}')
 {% endif %}
@@ -90,17 +105,17 @@ def delete_{{ table.business_name }}(ids: str):
 @FileDownloadValidator()
 @QueryValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:export'))
-def export_{{ table.business_name }}(dto: {{ underscore(table.class_name) }}_po):
+def export_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     """导出{{ table.function_name }}列表"""
     {{ underscore(table.class_name) }}_entity = {{ table.class_name }}()
     # 转换PO到Entity对象
     for attr in dto.model_fields.keys():
         if hasattr({{ underscore(table.class_name) }}_entity, attr):
             setattr({{ underscore(table.class_name) }}_entity, attr, getattr(dto, attr))
-    {{ table.business_name }}s, total = {{ table.class_name|lower }}_service.select_{{ table.business_name }}_list({{ underscore(table.class_name) }}_entity)
+    {{ underscore(table.business_name) }}s, total = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_list({{ underscore(table.class_name) }}_entity)
     # 使用ExcelUtil导出Excel文件
     excel_util = ExcelUtil({{ underscore(table.class_name) }}_po)
-    return excel_util.export_response({{ table.business_name }}s, "{{ table.function_name }}数据")
+    return excel_util.export_response({{ underscore(table.business_name) }}s, "{{ table.function_name }}数据")
 
 @gen.route('/importTemplate', methods=['POST'])
 @FileDownloadValidator()
@@ -129,16 +144,16 @@ def import_data():
         po_list = excel_util.import_file(file, sheetname="{{ table.function_name }}数据")
         
         # 转换为Entity对象列表
-        {{ table.business_name }}_list = []
+        {{ underscore(table.business_name) }}_list = []
         for po in po_list:
             {{ underscore(table.class_name) }}_entity = {{ table.class_name }}()
             for attr in po.model_fields.keys():
                 if hasattr({{ underscore(table.class_name) }}_entity, attr):
                     setattr({{ underscore(table.class_name) }}_entity, attr, getattr(po, attr))
-            {{ table.business_name }}_list.append({{ underscore(table.class_name) }}_entity)
+            {{ underscore(table.business_name) }}_list.append({{ underscore(table.class_name) }}_entity)
         
         # 调用Service层处理导入逻辑
-        msg = {{ table.class_name|lower }}_service.import_{{ table.business_name }}({{ table.business_name }}_list, update_support)
+        msg = {{ underscore(table.class_name) }}_service.import_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}_list, update_support)
         return AjaxResponse.from_success(msg=msg)
     except Exception as e:
         return AjaxResponse.from_error(msg=f'导入失败: {str(e)}')

@@ -3,41 +3,90 @@
 # @FileName: {{ underscore(table.class_name) }}_po.py
 # @Time    : {{ datetime }}
 
-from typing import Optional, Union
+from typing import Optional
 from datetime import datetime
 
-from pydantic import ConfigDict, Field
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, Integer, JSON, LargeBinary, Numeric, String, Text, Time
+from sqlalchemy.orm import Mapped, mapped_column
 
-from ruoyi_common.base.model import BaseEntity
-from ruoyi_common.utils.base import DateUtil
+from ruoyi_admin.ext import db
 
-class {{ underscore(table.class_name) }}_po(BaseEntity):
+class {{ underscore(table.class_name) }}_po(db.Model):
     """
     {{ table.table_comment }}PO对象
     """
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_encoders = {
-            datetime: lambda v: v.strftime(DateUtil.YYYY_MM_DD_HH_MM_SS) if v else None
-        },
-        alias_generator = lambda field: ''.join(['_' + c.lower() if c.isupper() else c for c in field]).lstrip('_')
-    )
+    __tablename__ = '{{ table.table_name }}'
+    __table_args__ = {'comment': '{{ table.table_comment }}'}
 
 {%- for column in table.columns %}
-{%- if column.java_type == 'String' or column.java_type == 'str' %}
-    {{ underscore(column.java_field) }}: Optional[str] = Field(None, alias='{{ column.java_field }}')
-{%- elif column.java_type == 'Integer' or column.java_type == 'int' %}
-    {{ underscore(column.java_field) }}: Optional[int] = Field(None, alias='{{ column.java_field }}')
-{%- elif column.java_type == 'Long' %}
-    {{ underscore(column.java_field) }}: Optional[int] = Field(None, alias='{{ column.java_field }}')
-{%- elif column.java_type == 'Float' or column.java_type == 'Double' %}
-    {{ underscore(column.java_field) }}: Optional[float] = Field(None, alias='{{ column.java_field }}')
-{%- elif column.java_type == 'Boolean' or column.java_type == 'bool' %}
-    {{ underscore(column.java_field) }}: Optional[bool] = Field(None, alias='{{ column.java_field }}')
+{%- set raw_type = (column.column_type or 'varchar(255)')|lower %}
+{%- if '(' in raw_type %}
+{%- set base_type = raw_type.split('(')[0] %}
+{%- set arg_string = raw_type.split('(')[1].split(')')[0] %}
 {%- else %}
-    {{ underscore(column.java_field) }}: Optional[str] = Field(None, alias='{{ column.java_field }}')
+{%- set base_type = raw_type %}
+{%- set arg_string = '' %}
 {%- endif %}
+{%- set args = arg_string.split(',') if arg_string else [] %}
+{%- set length = args[0].strip() if args and args[0] else '' %}
+{%- set precision = args[0].strip() if args and args[0] else '' %}
+{%- set scale = args[1].strip() if args|length > 1 else '' %}
+{%- set attr_name = underscore(column.java_field) %}
+{%- set nullable_flag = 'False' if column.is_required == '1' else 'True' %}
+{%- set py_type = 'Optional[str]' %}
+{%- if column.java_type in ['Integer', 'int'] %}
+{%- set py_type = 'Optional[int]' %}
+{%- elif column.java_type in ['Long'] %}
+{%- set py_type = 'Optional[int]' %}
+{%- elif column.java_type in ['Float', 'Double'] %}
+{%- set py_type = 'Optional[float]' %}
+{%- elif column.java_type in ['Boolean', 'bool'] %}
+{%- set py_type = 'Optional[bool]' %}
+{%- elif column.java_type in ['Date', 'DateTime'] %}
+{%- set py_type = 'Optional[datetime]' %}
+{%- endif %}
+{%- if column.is_pk == '1' %}
+{%- set py_type = 'int' %}
+{%- set nullable_flag = 'False' %}
+{%- endif %}
+{%- set type_expr = 'String(255)' %}
+{%- if base_type in ['varchar', 'char', 'nvarchar'] %}
+{%- set type_expr = 'String(' ~ (length or '255') ~ ')' %}
+{%- elif base_type in ['text', 'mediumtext', 'longtext'] %}
+{%- set type_expr = 'Text' %}
+{%- elif base_type in ['int', 'integer', 'smallint', 'mediumint'] %}
+{%- set type_expr = 'Integer' %}
+{%- elif base_type in ['tinyint'] %}
+{%- if column.java_type in ['Boolean', 'bool'] %}
+{%- set type_expr = 'Boolean' %}
+{%- else %}
+{%- set type_expr = 'Integer' %}
+{%- endif %}
+{%- elif base_type in ['bigint'] %}
+{%- set type_expr = 'BigInteger' %}
+{%- elif base_type in ['float', 'double'] %}
+{%- set type_expr = 'Float' %}
+{%- elif base_type in ['decimal', 'numeric'] %}
+{%- set type_expr = 'Numeric(' ~ (precision or '10') ~ (', ' ~ scale if scale else ', 0') ~ ')' %}
+{%- elif base_type in ['date'] %}
+{%- set type_expr = 'Date' %}
+{%- elif base_type in ['datetime', 'timestamp'] %}
+{%- set type_expr = 'DateTime' %}
+{%- elif base_type in ['time'] %}
+{%- set type_expr = 'Time' %}
+{%- elif base_type in ['json'] %}
+{%- set type_expr = 'JSON' %}
+{%- elif base_type in ['blob', 'longblob', 'mediumblob'] %}
+{%- set type_expr = 'LargeBinary' %}
+{%- endif %}
+    {{ attr_name }}: Mapped[{{ py_type }}] = mapped_column(
+        '{{ column.column_name }}',
+        {{ type_expr }},
+{%- if column.is_pk == '1' %}
+        primary_key=True,
+        autoincrement={{ 'True' if column.is_increment == '1' else 'False' }},
+{%- endif %}
+        nullable={{ nullable_flag }},
+        comment='{{ column.column_comment | replace("'", "\\'") if column.column_comment else '' }}'
+    )
 {%- endfor %}
-    # 分页参数
-    page_num: Optional[int] = Field(None, alias='pageNum')
-    page_size: Optional[int] = Field(None, alias='pageSize')

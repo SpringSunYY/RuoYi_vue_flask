@@ -10,77 +10,75 @@ from sqlalchemy import select, update, delete, func
 
 from ruoyi_admin.ext import db
 from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
+from {{ get_import_path(table.package_name, table.module_name, 'domain', table.class_name) }} import {{ underscore(table.class_name) }}_po
 
-class {{ table.class_name }}Mapper:
+class {{ underscore(table.class_name) }}_mapper:
     """{{ table.function_name }}Mapper"""
 
     @staticmethod
-    def select_list({{ table.business_name }}: {{ table.class_name }}) -> List[{{ table.class_name }}]:
+    def select_{{ underscore(table.class_name) }}_list({{ underscore(table.business_name) }}: {{ table.class_name }}) -> List[{{ table.class_name }}]:
         """
         查询{{ table.function_name }}列表
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             List[{{ table.class_name }}]: {{ table.function_name }}列表
         """
         try:
             # 构建查询条件
-            stmt = select({{ table.class_name }})
+            stmt = select({{ underscore(table.class_name) }}_po)
 {% for column in table.columns %}
 {% if column.is_query and column.query_type == 'EQ' %}
-            if {{ table.business_name }}.{{ underscore(column.java_field) }} is not None:
-                stmt = stmt.where({{ table.class_name }}.{{ underscore(column.java_field) }} == {{ table.business_name }}.{{ underscore(column.java_field) }})
+            if {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }} is not None:
+                stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }} == {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }})
 {% elif column.is_query and column.query_type == 'LIKE' %}
-            if {{ table.business_name }}.{{ underscore(column.java_field) }}:
-                stmt = stmt.where({{ table.class_name }}.{{ underscore(column.java_field) }}.like("%" + str({{ table.business_name }}.{{ underscore(column.java_field) }}) + "%"))
+            if {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}:
+                stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }}.like("%" + str({{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}) + "%"))
 {% endif %}
 {% endfor %}
-
             # 添加分页条件
-            if {{ table.business_name }}.page_num and {{ table.business_name }}.page_size:
-                offset = ({{ table.business_name }}.page_num - 1) * {{ table.business_name }}.page_size
-                stmt = stmt.offset(offset).limit({{ table.business_name }}.page_size)
+            if {{ underscore(table.business_name) }}.page_num and {{ underscore(table.business_name) }}.page_size:
+                offset = ({{ underscore(table.business_name) }}.page_num - 1) * {{ underscore(table.business_name) }}.page_size
+                stmt = stmt.offset(offset).limit({{ underscore(table.business_name) }}.page_size)
 
             result = db.session.execute(stmt).scalars().all()
-            return list(result) if result else []
+            return [{{ table.class_name }}.model_validate(item) for item in result] if result else []
         except Exception as e:
             print(f"查询{{ table.function_name }}列表出错: {e}")
             return []
 
     @staticmethod
-    def select_count({{ table.business_name }}: {{ table.class_name }}) -> int:
+    def select_{{ underscore(table.class_name) }}_count({{ underscore(table.business_name) }}: {{ table.class_name }}) -> int:
         """
         查询{{ table.function_name }}总数
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             int: {{ table.function_name }}总数
         """
         try:
-            stmt = select(func.count({{ table.class_name }}.{{ underscore(table.pk_column.java_field) if table.pk_column }}))
+            stmt = select(func.count()).select_from({{ underscore(table.class_name) }}_po)
 {% for column in table.columns %}
 {% if column.is_query and column.query_type == 'EQ' %}
-            if {{ table.business_name }}.{{ underscore(column.java_field) }} is not None:
-                stmt = stmt.where({{ table.class_name }}.{{ underscore(column.java_field) }} == {{ table.business_name }}.{{ underscore(column.java_field) }})
+            if {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }} is not None:
+                stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }} == {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }})
 {% elif column.is_query and column.query_type == 'LIKE' %}
-            if {{ table.business_name }}.{{ underscore(column.java_field) }}:
-                stmt = stmt.where({{ table.class_name }}.{{ underscore(column.java_field) }}.like("%" + str({{ table.business_name }}.{{ underscore(column.java_field) }}) + "%"))
+            if {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}:
+                stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }}.like("%" + str({{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}) + "%"))
 {% endif %}
 {% endfor %}
-
             result = db.session.execute(stmt).scalar()
             return result if result else 0
         except Exception as e:
             print(f"查询{{ table.function_name }}总数出错: {e}")
             return 0
-
     {% if table.pk_column %}
     @staticmethod
-    def select_by_id({{ underscore(table.pk_column.java_field) }}: int) -> {{ table.class_name }}:
+    def select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.pk_column.java_field) }}: int) -> {{ table.class_name }}:
         """
         根据ID查询{{ table.function_name }}
 
@@ -91,33 +89,40 @@ class {{ table.class_name }}Mapper:
             {{ table.class_name }}: {{ table.function_name }}对象
         """
         try:
-            stmt = select({{ table.class_name }}).where({{ table.class_name }}.{{ underscore(table.pk_column.java_field) }} == {{ underscore(table.pk_column.java_field) }})
-            result = db.session.execute(stmt).scalar_one_or_none()
-            return result
+            result = db.session.get({{ underscore(table.class_name) }}_po, {{ underscore(table.pk_column.java_field) }})
+            return {{ table.class_name }}.model_validate(result) if result else None
         except Exception as e:
             print(f"根据ID查询{{ table.function_name }}出错: {e}")
             return None
     {% endif %}
 
     @staticmethod
-    def insert({{ table.business_name }}: {{ table.class_name }}) -> int:
+    def insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}: {{ table.class_name }}) -> int:
         """
         新增{{ table.function_name }}
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             int: 插入的记录数
         """
         try:
-            # 设置创建时间和更新时间
             now = datetime.now()
-            {{ table.business_name }}.create_time = now
-            {{ table.business_name }}.update_time = now
-
-            db.session.add({{ table.business_name }})
+            new_po = {{ underscore(table.class_name) }}_po()
+{%- for column in table.columns %}
+{%- set attr = underscore(column.java_field) %}
+{%- if column.column_name in ['create_time', 'update_time'] %}
+            new_po.{{ attr }} = {{ underscore(table.business_name) }}.{{ attr }} or now
+{%- else %}
+            new_po.{{ attr }} = {{ underscore(table.business_name) }}.{{ attr }}
+{%- endif %}
+{%- endfor %}
+            db.session.add(new_po)
             db.session.commit()
+{%- if table.pk_column %}
+            {{ underscore(table.business_name) }}.{{ underscore(table.pk_column.java_field) }} = new_po.{{ underscore(table.pk_column.java_field) }}
+{%- endif %}
             return 1
         except Exception as e:
             db.session.rollback()
@@ -126,31 +131,46 @@ class {{ table.class_name }}Mapper:
 
     {% if table.pk_column %}
     @staticmethod
-    def update({{ table.business_name }}: {{ table.class_name }}) -> int:
+    def update_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}: {{ table.class_name }}) -> int:
         """
         修改{{ table.function_name }}
 
         Args:
-            {{ table.business_name }} ({{ table.class_name }}): {{ table.function_name }}对象
+            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
             int: 更新的记录数
         """
         try:
-            # 设置更新时间
-            {{ table.business_name }}.update_time = datetime.now()
-
-            # 使用ORM方式更新数据
-            db.session.merge({{ table.business_name }})
+            {% if table.pk_column %}
+            existing = db.session.get({{ underscore(table.class_name) }}_po, {{ underscore(table.business_name) }}.{{ underscore(table.pk_column.java_field) }})
+            if not existing:
+                return 0
+            now = datetime.now()
+{%- for column in table.columns %}
+{%- set attr = underscore(column.java_field) %}
+{%- if column.is_pk == '1' %}
+            # 主键不参与更新
+{%- elif column.column_name == 'update_time' %}
+            existing.{{ attr }} = {{ underscore(table.business_name) }}.{{ attr }} or now
+{%- else %}
+            existing.{{ attr }} = {{ underscore(table.business_name) }}.{{ attr }}
+{%- endif %}
+{%- endfor %}
             db.session.commit()
             return 1
+            {% else %}
+            db.session.merge({{ underscore(table.business_name) }})
+            db.session.commit()
+            return 1
+            {% endif %}
         except Exception as e:
             db.session.rollback()
             print(f"修改{{ table.function_name }}出错: {e}")
             return 0
 
     @staticmethod
-    def delete_by_ids(ids: List[int]) -> int:
+    def delete_{{ underscore(table.class_name) }}_by_ids(ids: List[int]) -> int:
         """
         批量删除{{ table.function_name }}
 
@@ -161,7 +181,7 @@ class {{ table.class_name }}Mapper:
             int: 删除的记录数
         """
         try:
-            stmt = delete({{ table.class_name }}).where({{ table.class_name }}.{{ underscore(table.pk_column.java_field) }}.in_(ids))
+            stmt = delete({{ underscore(table.class_name) }}_po).where({{ underscore(table.class_name) }}_po.{{ underscore(table.pk_column.java_field) }}.in_(ids))
             result = db.session.execute(stmt)
             db.session.commit()
             return result.rowcount

@@ -536,9 +536,9 @@ class GenUtils:
                                 # PO 文件在 domain/po/ 目录下
                                 dir_files[dir_path].append(('po', f"{to_underscore(table.class_name)}_po", table))
                             elif '_service.py' in output_file_name:
-                                dir_files[dir_path].append(('service', f"{table.class_name}Service", table))
+                                dir_files[dir_path].append(('service', f"{to_underscore(table.class_name)}_service", table))
                             elif '_mapper.py' in output_file_name:
-                                dir_files[dir_path].append(('mapper', f"{table.class_name}Mapper", table))
+                                dir_files[dir_path].append(('mapper', f"{to_underscore(table.class_name)}_mapper", table))
                             elif '_controller.py' in output_file_name:
                                 dir_files[dir_path].append(('controller', 'gen', table))
                         
@@ -604,9 +604,9 @@ class GenUtils:
                                 po_file_name = class_name  # class_name 已经是 address_info_po
                                 imports.append(f"from .{po_file_name} import {class_name}")
                             elif file_type == 'service':
-                                imports.append(f"from .{to_underscore(class_name.replace('Service', ''))}_service import {class_name}")
+                                imports.append(f"from .{class_name} import {class_name}")
                             elif file_type == 'mapper':
-                                imports.append(f"from .{to_underscore(class_name.replace('Mapper', ''))}_mapper import {class_name}")
+                                imports.append(f"from .{class_name} import {class_name}")
                         
                         if imports:
                             init_lines.extend(sorted(set(imports)))
@@ -824,9 +824,9 @@ class GenUtils:
                                     # PO 文件在 domain/po/ 目录下
                                     dir_files[dir_path].append(('po', f"{to_underscore(table.class_name)}_po", table))
                                 elif '_service.py' in output_file_name:
-                                    dir_files[dir_path].append(('service', f"{table.class_name}Service", table))
+                                    dir_files[dir_path].append(('service', f"{to_underscore(table.class_name)}_service", table))
                                 elif '_mapper.py' in output_file_name:
-                                    dir_files[dir_path].append(('mapper', f"{table.class_name}Mapper", table))
+                                    dir_files[dir_path].append(('mapper', f"{to_underscore(table.class_name)}_mapper", table))
                                 elif '_controller.py' in output_file_name:
                                     dir_files[dir_path].append(('controller', 'gen', table))
                             
@@ -904,9 +904,9 @@ class GenUtils:
                                 po_file_name = class_name  # class_name 已经是 address_info_po
                                 imports.append(f"from .{po_file_name} import {class_name}")
                             elif file_type == 'service':
-                                imports.append(f"from .{to_underscore(class_name.replace('Service', ''))}_service import {class_name}")
+                                imports.append(f"from .{class_name} import {class_name}")
                             elif file_type == 'mapper':
-                                imports.append(f"from .{to_underscore(class_name.replace('Mapper', ''))}_mapper import {class_name}")
+                                imports.append(f"from .{class_name} import {class_name}")
                         
                         if imports:
                             init_lines.extend(sorted(set(imports)))
