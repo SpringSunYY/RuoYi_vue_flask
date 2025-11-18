@@ -121,3 +121,29 @@ def login_user_is_admin() -> bool:
         return is_user_admin(user)
     except:
         return is_admin(get_user_id())
+
+
+def encrypt_password(password: str) -> str:
+    """
+    使用 bcrypt 加密密码
+    """
+    if not password:
+        raise UtilException("密码不能为空", HttpStatus.BAD_REQUEST)
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    return hashed.decode("utf-8")
+
+
+def matches_password(raw_password: str, encoded_password: str) -> bool:
+    """
+    判断原始密码与加密密码是否匹配
+    """
+    if not raw_password or not encoded_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            raw_password.encode("utf-8"),
+            encoded_password.encode("utf-8"),
+        )
+    except ValueError:
+        # encoded_password 不是合法的 bcrypt 字符串
+        return False

@@ -227,13 +227,26 @@ class SysUserMapper:
 
         column = getattr(SysUserPo, key)
         stmt = select(*user_columns, *dept_columns, *role_columns).distinct() \
-            .join(SysDeptPo, SysUserPo.dept_id == SysDeptPo.dept_id) \
-            .join(SysUserRolePo, SysUserPo.user_id == SysUserRolePo.user_id) \
-            .join(SysRolePo, SysUserRolePo.role_id == SysRolePo.role_id) \
+            .join(
+                SysDeptPo,
+                SysUserPo.dept_id == SysDeptPo.dept_id,
+                isouter=True
+            ) \
+            .join(
+                SysUserRolePo,
+                SysUserPo.user_id == SysUserRolePo.user_id,
+                isouter=True
+            ) \
+            .join(
+                SysRolePo,
+                SysUserRolePo.role_id == SysRolePo.role_id,
+                isouter=True
+            ) \
             .where(column == value)
         rows = db.session.execute(stmt).all()
 
         eo_tmp = {}
+        role_pk_label = role_columns[0].key if role_columns else None
         for row in rows:
             if key in eo_tmp:
                 user = eo_tmp[key]
@@ -241,7 +254,8 @@ class SysUserMapper:
                 user = user_columns.cast(row, SysUser)
                 user.dept = dept_columns.cast(row, SysDept)
                 eo_tmp[key] = user
-            user.roles.append(role_columns.cast(row, SysRole))
+            if role_pk_label and getattr(row, role_pk_label) is not None:
+                user.roles.append(role_columns.cast(row, SysRole))
 
         return eo_tmp[key] if rows else None
 

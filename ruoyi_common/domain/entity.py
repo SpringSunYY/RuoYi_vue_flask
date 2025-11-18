@@ -75,9 +75,9 @@ class SysUser(AuditEntity):
     ]
 
     dept_id: Annotated[
-        int,
+        Optional[int],
         BeforeValidator(str_to_int),
-        Field(gt=0, default=None),
+        Field(default=None),
         VoField(query=True),
         ExcelField(name="部门编号", action="import")
     ]
@@ -369,9 +369,9 @@ class SysDictData(AuditEntity):
 
 class SysDept(AuditEntity):
     dept_id: Annotated[
-        int,
+        Optional[int],
         BeforeValidator(str_to_int),
-        Field(gt=0, default=None, vo=VoAccess(query=True))
+        Field(default=None, vo=VoAccess(query=True))
     ]
 
     parent_id: Annotated[
