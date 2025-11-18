@@ -43,7 +43,7 @@ def common_download(
     return response
 
 
-@reg.api.route('/common/upload')
+@reg.api.route('/common/upload', methods=['POST'])
 @FileValidator()
 @JsonSerializer()
 def common_upload(file: MultiFile):
@@ -53,14 +53,15 @@ def common_upload(file: MultiFile):
     new_file_name = FileUploadUtil.get_filename(file_name)
     original_filename = file.filename
     ajax_response = AjaxResponse.from_success()
+    # 为了兼容若依 Vue 前端，这里的字段名与 Java 版保持一致（驼峰命名）
     setattr(ajax_response, "url", url)
-    setattr(ajax_response, "file_name", file_name)
-    setattr(ajax_response, "new_file_name", new_file_name)
-    setattr(ajax_response, "original_filename", original_filename)
+    setattr(ajax_response, "fileName", file_name)
+    setattr(ajax_response, "newFileName", new_file_name)
+    setattr(ajax_response, "originalFilename", original_filename)
     return ajax_response
 
 
-@reg.api.route('/common/uploads')
+@reg.api.route('/common/uploads', methods=['POST'])
 @FileValidator()
 @JsonSerializer()
 def common_uploads(files: MultiFile):
@@ -78,10 +79,11 @@ def common_uploads(files: MultiFile):
         original_filename = file.filename
         original_filenames.append(original_filename)
     ajax_response = AjaxResponse.from_success()
-    setattr(ajax_response, "urls", urls.join(","))
-    setattr(ajax_response, "file_names", file_names.join(","))
-    setattr(ajax_response, "new_file_names", new_file_names.join(","))
-    setattr(ajax_response, "original_filenames", original_filenames.join(","))
+    # 多文件上传字段命名也与若依保持一致
+    setattr(ajax_response, "urls", ",".join(urls))
+    setattr(ajax_response, "fileNames", ",".join(file_names))
+    setattr(ajax_response, "newFileNames", ",".join(new_file_names))
+    setattr(ajax_response, "originalFilenames", ",".join(original_filenames))
     return ajax_response
 
 
@@ -105,3 +107,23 @@ def common_download_resource(
     except Exception as e:
         return AjaxResponse.from_error("下载失败")
     return response
+
+
+@reg.api.route(f"{Constants.RESOURCE_PREFIX}/<path:resource>")
+def common_profile_resource(resource: str):
+    """
+    静态资源访问：
+    将 /profile/** 映射到配置的 profile 物理目录下，与 Java 版若依保持一致。
+
+    例如：
+    ruoyi.profile = G:/ruoyi/uploadPath
+    URL:  /profile/upload/2025/11/18/xxx.jpg
+    实际: G:/ruoyi/uploadPath/upload/2025/11/18/xxx.jpg
+    """
+    try:
+        return send_from_directory(
+            directory=RuoYiConfig.profile,
+            path=resource,
+        )
+    except NotFound:
+        return AjaxResponse.from_error("文件不存在")

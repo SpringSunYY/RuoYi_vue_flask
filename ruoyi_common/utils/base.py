@@ -159,6 +159,20 @@ class StringUtil:
         return str(value).zfill(length)
 
     @classmethod
+    def left_pad(cls, value, length:int) -> str:
+        """
+        兼容方法：left_pad 等同于 pad_left
+
+        Args:
+            value (_type_): 输入字符串
+            length (int): 目标长度
+
+        Returns:
+            str: 填充后的字符串
+        """
+        return cls.pad_left(value, length)
+
+    @classmethod
     def substring_after(cls, string:str, separator:str) -> str:
         """
         获取字符串string中第一个分隔符separator之后的字符串
@@ -612,7 +626,8 @@ class MimeTypeUtil:
         # pdf
         "pdf" ]
 
-    def get_extension(cls, mime_type:str):
+    @classmethod
+    def get_extension(cls, mime_type: str) -> str:
         '''
         根据mime_type获取文件扩展名
 
@@ -724,27 +739,49 @@ class FileUploadUtil:
             raise Exception("文件名长度超过限制")
         cls.check_allowed(file, MimeTypeUtil.DEFAULT_ALLOWED_EXTENSION)
         filename = cls.extract_file_name(file)
+        # 物理磁盘完整路径，例如：G:/ruoyi/uploadPath/upload/2025/11/18/xxx.jpg
         filepath = os.path.join(base_path, filename)
         file_parpath = os.path.dirname(filepath)
         if not os.path.exists(file_parpath):
             os.makedirs(file_parpath)
         file.save(filepath)
-        resource_path = Constants.RESOURCE_PREFIX + "/" + filepath
+        # 将物理路径转换为相对于 profile 的路径，生成浏览器可访问的 URL：
+        # /profile/upload/2025/11/18/xxx.jpg
+        # 为避免 utils.base 与 config 之间的循环依赖，这里在函数内部延迟导入 RuoYiConfig
+        from ruoyi_common.config import RuoYiConfig
+        relpath = os.path.relpath(filepath, RuoYiConfig.profile)
+        relpath = relpath.replace(os.sep, "/")
+        resource_path = Constants.RESOURCE_PREFIX + "/" + relpath
         return resource_path
 
     @classmethod
     def check_allowed(cls, file:FileStorage, allowed_extensions:List[str]):
         '''
-        文件大小校验
-
+        文件大小、类型校验（对标若依的 FileUploadUtils.assertAllowed）
+       
         Args:
             file(FileStorage): 文件对象
             allowed_extensions(List[str]): 允许的扩展名列表
         '''
+        # 1. 文件大小校验
+        # FileStorage 默认游标在起始位置，这里需要先 seek 到末尾再计算大小，
+        # 然后把游标复位，避免影响后续 file.save 调用。
+        current_pos = file.stream.tell()
+        file.stream.seek(0, os.SEEK_END)
         file_size = file.stream.tell()
+        file.stream.seek(current_pos, os.SEEK_SET)
         if file_size > cls.DEFAULT_MAX_SIZE:
             raise Exception("文件大小超过限制")
-        extension = MimeTypeUtil.get_extension(file.content_type.lower())
+
+        # 2. 扩展名校验
+        # 优先根据原始文件名获取扩展名，与若依 Java 版保持一致，
+        # 只有当文件名没有扩展名时，才回退到根据 content_type 推断。
+        extension = os.path.splitext(file.filename)[1]
+        if extension.startswith("."):
+            extension = extension[1:]
+        extension = extension.lower()
+        if not extension:
+            extension = MimeTypeUtil.get_extension(file.content_type.lower())
         if extension not in allowed_extensions:
             if allowed_extensions == MimeTypeUtil.IMAGE_EXTENSION:
                 raise Exception("图片格式不支持")
@@ -760,18 +797,19 @@ class FileUploadUtil:
     @classmethod
     def extract_file_name(cls, file:FileStorage) -> str:
         '''
-        提取文件名
-
+        提取文件名，仿照若依：
+        日期路径/原文件名_序列号.扩展名
+        
         Args:
             file(FileStorage): 文件对象
-
+        
         Returns:
             str: 文件名
         '''
-        "{}/{}_{}.{}".format(
+        return "{}/{}_{}.{}".format(
             DateUtil.get_date_path(),
             os.path.basename(file.filename),
-            Seq.get_seq_id(cls.upload_seq_type),
+            Seq.get_seq_id(Seq.upload_seq_type),
             cls.get_extension(file)
         )
 

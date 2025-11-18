@@ -3,13 +3,14 @@ import inspect
 from abc import ABC, abstractmethod
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Callable,  Dict, Tuple, Type, ClassVar, \
+from typing import Annotated, Any, Callable, Dict, Tuple, Type, ClassVar, \
     Optional, Set
 from werkzeug.exceptions import BadRequest, InternalServerError
-from flask import has_request_context
+from flask import has_request_context, request
 from pydantic import BaseModel, ValidationError, validate_call
 from pydantic.fields import FieldInfo
 
+from ruoyi_common.base.model import MultiFile
 from ruoyi_common.base.reqparser import BaseReqParser, BodyReqParser, \
     DownloadFileQueryReqParser, UploadFileFormReqParser, PathReqParser, \
     QueryReqParser, VoValidatorContext
@@ -164,6 +165,19 @@ class ValidatorViewFunction(AbcValidatorFunction):
             obj = self._data_parser.cast_model(bo_model)
             kwargs[key] = obj
         else:
+            # 特殊处理文件上传参数（MultiFile），直接从 request.files 构造
+            has_multi_file_param = any(
+                param.annotation is MultiFile
+                for param in self.sig.parameters.values()
+            )
+            if has_multi_file_param:
+                files = MultiFile.from_obj(request.files)
+                kwargs.clear()
+                for name, param in self.sig.parameters.items():
+                    if param.annotation is MultiFile:
+                        kwargs[name] = files
+                return
+
             data = self._data_parser.data()
             kwargs.clear()
             kwargs.update(data)

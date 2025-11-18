@@ -367,8 +367,18 @@ class MultiFile(ImmutableMultiDict[str, FileStorage]):
         return next(self.values())
 
     @classmethod
-    def from_obj(cls,obj:ImmutableMultiDict):
-        return cls(**obj.to_dict())
+    def from_obj(cls, obj: ImmutableMultiDict):
+        """
+        从 ImmutableMultiDict 构造 MultiFile
+
+        Args:
+            obj (ImmutableMultiDict): Flask/Werkzeug 提供的 files 对象
+
+        Returns:
+            MultiFile: 包装后的文件字典
+        """
+        # 直接用原始对象初始化，避免使用 **kwargs 造成参数不匹配
+        return cls(obj)
 
 
 class VoModel(BaseModel):
