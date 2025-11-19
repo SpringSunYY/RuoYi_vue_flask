@@ -49,21 +49,3 @@ export function del{{ ApiName }}({{ table.pk_column.java_field if table.pk_colum
     method: 'delete'
   })
 }
-
-// 导出{{ table.function_name }}
-export function export{{ ApiName }}(query) {
-  return request({
-    url: '/{{ table.module_name }}/{{ table.business_name }}/export',
-    method: 'post',
-    params: query
-  })
-}
-
-// 导入{{ table.function_name }}
-export function importData(data) {
-  return request({
-    url: '/{{ table.module_name }}/{{ table.business_name }}/importData',
-    method: 'post',
-    data: data
-  })
-}

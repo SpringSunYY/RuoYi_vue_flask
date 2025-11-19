@@ -1,0 +1,558 @@
+{% macro getColumnDictType(column) %}
+  {% if column.dict_type != '' %}{{ column.dict_type }}
+  {% else %}null
+  {% endif %}
+{% endmacro %}
+
+<template>
+  <div class="app-container">
+    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
+{%- for column in table.columns %}
+{%- if column.is_query %}
+      <el-form-item label="{{ column.column_comment }}" prop="{{ underscore(column.java_field) }}">
+  {%- if column.html_type == 'input' %}
+        <el-input
+          v-model="queryParams.{{ underscore(column.java_field) }}"
+          placeholder="请输入{{ column.column_comment }}"
+          clearable
+          @keyup.enter.native="handleQuery"
+        />
+  {%- elif column.html_type == 'select' and column.dict_type != '' %}
+        <el-select v-model="queryParams.{{ underscore(column.java_field) }}" placeholder="请选择{{ column.column_comment }}" clearable>
+          <el-option
+            v-for="dict in {{ getColumnDictType(column) }}Options"
+            :key="dict.value"
+            :label="dict.label"
+            :value="dict.value"
+          />
+        </el-select>
+  {%- elif column.html_type == 'datetime' %}
+        <el-date-picker
+          v-model="daterange{{ column.java_field }}"
+          value-format="yyyy-MM-dd"
+          type="daterange"
+          range-separator="-"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+        ></el-date-picker>
+  {%- endif %}
+      </el-form-item>
+{%- endif %}
+{%- endfor %}
+      <el-form-item>
+        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5">
+        <el-button
+          type="primary"
+          plain
+          icon="el-icon-plus"
+          size="mini"
+          @click="handleAdd"
+          v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:add']"
+        >新增</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="success"
+          plain
+          icon="el-icon-edit"
+          size="mini"
+          :disabled="single"
+          @click="handleUpdate"
+          v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:edit']"
+        >修改</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="danger"
+          plain
+          icon="el-icon-delete"
+          size="mini"
+          :disabled="multiple"
+          @click="handleDelete"
+          v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:remove']"
+        >删除</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="warning"
+          plain
+          icon="el-icon-download"
+          size="mini"
+          @click="handleExport"
+          v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:export']"
+        >导出</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="info"
+          plain
+          icon="el-icon-upload2"
+          size="mini"
+          @click="handleImport"
+          v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:import']"
+        >导入</el-button>
+      </el-col>
+      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList" :columns="columns"></right-toolbar>
+    </el-row>
+
+    <el-table v-loading="loading" :data="{{ table.business_name }}List" @selection-change="handleSelectionChange">
+      <el-table-column type="selection" width="55" align="center" />
+{%- for column in table.columns %}
+{%- if column.is_list %}
+      <el-table-column label="{{ column.column_comment }}" align="center" v-if="columns[{{ column.list_index }}].visible" prop="{{ underscore(column.java_field) }}" />
+{%- endif %}
+{%- endfor %}
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+        <template slot-scope="scope">
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-edit"
+            @click="handleUpdate(scope.row)"
+            v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:edit']"
+          >修改</el-button>
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-delete"
+            @click="handleDelete(scope.row)"
+            v-hasPermi="['{{ table.module_name }}:{{ table.business_name }}:remove']"
+          >删除</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <pagination
+      v-show="total>0"
+      :total="total"
+      :page.sync="queryParams.pageNum"
+      :limit.sync="queryParams.pageSize"
+      @pagination="getList"
+    />
+
+    <!-- {{ table.function_name }}导入对话框 -->
+    <el-dialog :title="upload.title" :visible.sync="upload.open" width="400px" append-to-body>
+      <el-upload
+        ref="upload"
+        :limit="1"
+        accept=".xlsx, .xls"
+        :headers="upload.headers"
+        :action="upload.url + '?updateSupport=' + upload.updateSupport"
+        :disabled="upload.isUploading"
+        :on-progress="handleFileUploadProgress"
+        :on-success="handleFileSuccess"
+        :auto-upload="false"
+        drag
+      >
+        <i class="el-icon-upload"></i>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <div class="el-upload__tip text-center" slot="tip">
+          <div class="el-upload__tip" slot="tip">
+            <el-checkbox v-model="upload.updateSupport"/>
+            是否更新已经存在的{{ table.function_name }}数据
+          </div>
+          <span>仅允许导入xls、xlsx格式文件。</span>
+          <el-link
+            type="primary"
+            :underline="false"
+            style="font-size:12px;vertical-align: baseline;"
+            @click="importTemplate"
+          >下载模板
+          </el-link>
+        </div>
+      </el-upload>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitFileForm">确 定</el-button>
+        <el-button @click="upload.open = false">取 消</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 添加或修改{{ table.function_name }}（含子表） -->
+    <el-dialog :title="title" :visible.sync="open" width="800px" append-to-body>
+      <el-form ref="form" :model="form" :rules="rules" label-width="100px">
+{%- for column in table.columns %}
+{%- if column.is_insert %}
+        <el-form-item label="{{ column.column_comment }}" prop="{{ underscore(column.java_field) }}">
+  {%- if column.html_type == 'input' %}
+          <el-input v-model="form.{{ underscore(column.java_field) }}" placeholder="请输入{{ column.column_comment }}" />
+  {%- elif column.html_type == 'textarea' %}
+          <el-input v-model="form.{{ underscore(column.java_field) }}" type="textarea" placeholder="请输入内容" />
+  {%- elif column.html_type == 'select' %}
+          <el-select v-model="form.{{ underscore(column.java_field) }}" placeholder="请选择{{ column.column_comment }}">
+            <el-option
+              v-for="dict in {{ getColumnDictType(column) }}Options"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            ></el-option>
+          </el-select>
+  {%- elif column.html_type == 'radio' %}
+          <el-radio-group v-model="form.{{ underscore(column.java_field) }}">
+            <el-radio
+              v-for="dict in {{ getColumnDictType(column) }}Options"
+              :key="dict.value"
+              :label="dict.value"
+            >{{ dict.label }}</el-radio>
+          </el-radio-group>
+  {%- elif column.html_type == 'checkbox' %}
+          <el-checkbox-group v-model="form.{{ underscore(column.java_field) }}">
+            <el-checkbox
+              v-for="dict in {{ getColumnDictType(column) }}Options"
+              :key="dict.value"
+              :label="dict.value"
+            >{{ dict.label }}</el-checkbox>
+          </el-checkbox-group>
+  {%- elif column.html_type == 'datetime' %}
+          <el-date-picker clearable
+            v-model="form.{{ underscore(column.java_field) }}"
+            type="date"
+            value-format="yyyy-MM-dd"
+            placeholder="选择{{ column.column_comment }}">
+          </el-date-picker>
+  {%- elif column.html_type == 'imageUpload' %}
+          <image-upload v-model="form.{{ underscore(column.java_field) }}"/>
+  {%- elif column.html_type == 'fileUpload' %}
+          <file-upload v-model="form.{{ underscore(column.java_field) }}"/>
+  {%- endif %}
+        </el-form-item>
+{%- endif %}
+{%- endfor %}
+
+        <!-- 子表区域 -->
+        <div style="margin-top: 10px; font-weight: bold;">子表</div>
+        <div style="margin-bottom: 10px; color: #909399;">
+          主表主键将通过 <code>{{ table.sub_table_fk_name if table.sub_table_fk_name else 'parent_id' }}</code> 作为外键写入子表。
+        </div>
+        <el-button type="primary" icon="el-icon-plus" size="mini" @click="addSubRow">新增子项</el-button>
+        <el-table :data="subRows" border style="width: 100%; margin-top: 10px;">
+          <el-table-column label="#" width="50">
+            <template slot-scope="scope">{{ "{{ scope.$index + 1 }}" }}</template>
+          </el-table-column>
+          <el-table-column label="键" width="200">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.key" placeholder="键" />
+            </template>
+          </el-table-column>
+          <el-table-column label="值">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.value" placeholder="值" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100">
+            <template slot-scope="scope">
+              <el-button type="text" size="mini" @click="removeSubRow(scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+{# 使用后端工具函数生成接口前缀：
+   - apiName  : scheduleInfo
+   - ApiName  : ScheduleInfo（listScheduleInfo / getScheduleInfo 等） #}
+{% set apiName = to_camel_case(table.class_name, False) %}
+{% set ApiName = capitalize_first(apiName) %}
+import {
+  list{{ ApiName }},
+  get{{ ApiName }},
+  del{{ ApiName }},
+  add{{ ApiName }},
+  update{{ ApiName }}
+} from "@/api/{{ table.module_name }}/{{ table.business_name }}";
+import { getToken } from "@/utils/auth";
+
+export default {
+  name: "{{ table.class_name }}",
+  data() {
+    return {
+      // 遮罩层
+      loading: true,
+      // 选中数组
+      ids: [],
+      // 非单个禁用
+      single: true,
+      // 非多个禁用
+      multiple: true,
+      // 显示搜索条件
+      showSearch: true,
+      // 总条数
+      total: 0,
+      // {{ table.function_name }}表格数据
+      {{ table.business_name }}List: [],
+      // 表格列信息
+      columns: [
+{%- for column in table.columns %}
+{%- if column.is_list %}
+        { key: {{ column.list_index }}, label: '{{ column.column_comment }}', visible: true }{% if not loop.last %},{% endif %}
+{%- endif %}
+{%- endfor %}
+      ],
+{%- for column in table.columns %}
+{%- if column.dict_type != '' %}
+      // {{ column.column_comment }}字典
+      {{ getColumnDictType(column) }}Options: [],
+{%- endif %}
+{%- endfor %}
+      // 弹出层标题
+      title: "",
+      // 是否显示弹出层
+      open: false,
+      // 导入相关参数
+      upload: {
+        // 是否显示弹出层
+        open: false,
+        // 弹出层标题
+        title: "",
+        // 是否禁用上传
+        isUploading: false,
+        // 是否更新已经存在的数据
+        updateSupport: 0,
+        // 设置上传的请求头部
+        headers: { Authorization: "Bearer " + getToken() },
+        // 上传的地址
+        url: process.env.VUE_APP_BASE_API + "/{{ table.module_name }}/{{ table.business_name }}/importData"
+      },
+{%- for column in table.columns %}
+{%- if column.html_type == 'datetime' %}
+      // {{ column.column_comment }}时间范围
+      daterange{{ column.java_field }}: [],
+{%- endif %}
+{%- endfor %}
+      // 查询参数（使用后端字段名，下划线风格）
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+{%- for column in table.columns %}
+{%- if column.is_query %}
+        {{ underscore(column.java_field) }}: null{% if not loop.last %},{% endif %}
+{%- endif %}
+{%- endfor %}
+      },
+      // 表单参数（提交前再统一处理需要转换的字段）
+      form: {},
+      // 子表行（通用 key/value 示例，可按需在后端解析）
+      subRows: [],
+      // 表单校验（同样用后端字段名，下划线）
+      rules: {
+      {%- for column in table.columns %}
+      {%- if column.is_required %}
+        {{ underscore(column.java_field) }}: [
+          { required: true, message: "{{ column.column_comment }}不能为空", trigger: "blur" }
+        ]{% if not loop.last %},{% endif %}
+      {%- endif %}
+      {%- endfor %}
+      }
+    };
+  },
+  created() {
+{%- set dictExists = false %}
+{%- for column in table.columns %}
+{%- if column.dict_type != '' %}
+    {%- if not dictExists %}
+    this.getDicts("{{ getColumnDictType(column) }}").then(response => {
+      this.{{ getColumnDictType(column) }}Options = response.data;
+    });
+    {%- set dictExists = true %}
+    {%- endif %}
+{%- endif %}
+{%- endfor %}
+    this.getList();
+  },
+  methods: {
+    /** 查询{{ table.function_name }}列表 */
+    getList() {
+      this.loading = true;
+{%- set has_datetime = false %}
+{%- for column in table.columns %}
+{%- if column.html_type == 'datetime' %}
+{%- if not has_datetime %}
+      this.queryParams.params = {};
+{%- set has_datetime = true %}
+{%- endif %}
+      if (null != this.daterange{{ column.java_field }} && '' != this.daterange{{ column.java_field }}.toString()) {
+        this.queryParams.params["begin{{ column.java_field }}"] = this.daterange{{ column.java_field }}[0];
+        this.queryParams.params["end{{ column.java_field }}"] = this.daterange{{ column.java_field }}[1];
+      }
+{%- endif %}
+{%- endfor %}
+      list{{ ApiName }}(this.queryParams).then(response => {
+        const rows = Array.isArray(response && response.rows) ? response.rows : (Array.isArray(response && response.data) ? response.data : []);
+        this.{{ table.business_name }}List = rows;
+        this.total = response.total || rows.length;
+        this.loading = false;
+      });
+    },
+{%- for column in table.columns %}
+{%- if column.dict_type != '' %}
+    // {{ column.column_comment }}字典翻译
+    dict_{{ underscore(column.java_field) }}_format(row, column) {
+      return this.selectDictLabel(this.{{ getColumnDictType(column) }}Options, row.{{ underscore(column.java_field) }});
+    },
+{%- endif %}
+{%- endfor %}
+    // 多选框选中数据
+    handleSelectionChange(selection) {
+      this.ids = selection.map(item => item.{{ underscore(table.pk_column.java_field) if table.pk_column }})
+      this.single = selection.length!==1
+      this.multiple = !selection.length
+    },
+    /** 新增按钮操作 */
+    handleAdd() {
+      this.reset();
+      this.open = true;
+      this.title = "添加{{ table.function_name }}";
+    },
+    /** 修改按钮操作 */
+    handleUpdate(row) {
+      this.reset();
+      const {{ underscore(table.pk_column.java_field) if table.pk_column }} = row.{{ underscore(table.pk_column.java_field) if table.pk_column }} || this.ids
+      get{{ ApiName }}({{ underscore(table.pk_column.java_field) if table.pk_column }}).then(response => {
+        this.form = response.data || {};
+        // 如果后端返回子表数据，尝试映射为本页面的 subRows（key/value），否则保持空
+        const children = this.form.children || this.form.subRows || [];
+        this.subRows = Array.isArray(children) ? children.map((it) => {
+          if (it && typeof it === 'object' && ('key' in it || 'value' in it)) return { key: it.key || '', value: it.value || '' };
+          // 兜底转字符串
+          return { key: '', value: JSON.stringify(it) };
+        }) : [];
+        this.open = true;
+        this.title = "修改{{ table.function_name }}";
+      });
+    },
+    /** 子表：新增一行 */
+    addSubRow() {
+      this.subRows.push({ key: "", value: "" });
+    },
+    /** 子表：删除一行 */
+    removeSubRow(index) {
+      this.subRows.splice(index, 1);
+    },
+    // 表单重置
+    reset() {
+      this.form = {
+{%- for column in table.columns %}
+        {{ underscore(column.java_field) }}: null{% if not loop.last %},{% endif %}
+{%- endfor %}
+      };
+      this.subRows = [];
+      this.resetForm("form");
+    },
+    // 取消按钮
+    cancel() {
+      this.open = false;
+      this.reset();
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+{%- for column in table.columns %}
+{%- if column.html_type == 'datetime' %}
+      this.daterange{{ column.java_field }} = [];
+{%- endif %}
+{%- endfor %}
+      this.resetForm("queryForm");
+      this.handleQuery();
+    },
+    /** 导出按钮操作 */
+    handleExport() {
+      this.download(
+        "{{ table.module_name }}/{{ table.business_name }}/export",
+        { ...this.queryParams },
+        "{{ table.business_name }}_" + new Date().getTime() + ".xlsx"
+      );
+    },
+    /** 导入按钮操作 */
+    handleImport() {
+      this.upload.title = "{{ table.function_name }}导入";
+      this.upload.open = true;
+    },
+    /** 下载模板操作 */
+    importTemplate() {
+      this.download(
+        "{{ table.module_name }}/{{ table.business_name }}/importTemplate",
+        {},
+        "{{ table.business_name }}_template_" + new Date().getTime() + ".xlsx"
+      );
+    },
+    // 文件上传中处理
+    handleFileUploadProgress() {
+      this.upload.isUploading = true;
+    },
+    // 文件上传成功处理
+    handleFileSuccess(response) {
+      this.upload.open = false;
+      this.upload.isUploading = false;
+      this.$refs.upload.clearFiles();
+      this.$alert(
+        "<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" +
+          response.msg +
+          "</div>",
+        "导入结果",
+        { dangerouslyUseHTMLString: true }
+      );
+      this.getList();
+    },
+    // 提交上传文件
+    submitFileForm() {
+      this.$refs.upload.submit();
+    },
+    /** 提交按钮 */
+    submitForm() {
+      // 将子表行附加到主表提交数据中，示例：挂载到 children 字段
+      const payload = Object.assign({}, this.form, {
+        // 后端可按需解析：children 或 subRows
+        children: this.subRows.map(r => ({ key: r.key, value: r.value })),
+        subRows: this.subRows.map(r => ({ key: r.key, value: r.value })),
+        // 写入子表外键字段（若后端按需使用）
+        {{ table.sub_table_fk_name if table.sub_table_fk_name else 'parent_id' }}: this.form.{{ underscore(table.pk_column.java_field) if table.pk_column }}
+      });
+      this.$refs["form"].validate(valid => {
+        if (valid) {
+          if (this.form.{{ underscore(table.pk_column.java_field) if table.pk_column }} != null) {
+            update{{ ApiName }}(payload).then(response => {
+              this.$modal.msgSuccess("修改成功");
+              this.open = false;
+              this.getList();
+            });
+          } else {
+            add{{ ApiName }}(payload).then(response => {
+              this.$modal.msgSuccess("新增成功");
+              this.open = false;
+              this.getList();
+            });
+          }
+        }
+      });
+    },
+    /** 删除按钮操作 */
+    handleDelete(row) {
+      const {{ table.business_name }}Ids = row.{{ underscore(table.pk_column.java_field) if table.pk_column }} || this.ids;
+      this.$modal.confirm('是否确认删除{{ table.function_name }}编号为"' + {{ table.business_name }}Ids + '"的数据项？').then(function() {
+        return del{{ ApiName }}({{ table.business_name }}Ids);
+      }).then(() => {
+        this.getList();
+        this.$modal.msgSuccess("删除成功");
+      }).catch(() => {});
+    }
+  }
+};
+</script>
+
+
