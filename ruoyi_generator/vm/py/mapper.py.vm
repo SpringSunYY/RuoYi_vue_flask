@@ -6,7 +6,8 @@
 from typing import List
 from datetime import datetime
 
-from sqlalchemy import select, update, delete, func
+from flask import g
+from sqlalchemy import select, update, delete
 
 from ruoyi_admin.ext import db
 from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
@@ -38,10 +39,8 @@ class {{ underscore(table.class_name) }}_mapper:
                 stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }}.like("%" + str({{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}) + "%"))
 {% endif %}
 {% endfor %}
-            # 添加分页条件
-            if {{ underscore(table.business_name) }}.page_num and {{ underscore(table.business_name) }}.page_size:
-                offset = ({{ underscore(table.business_name) }}.page_num - 1) * {{ underscore(table.business_name) }}.page_size
-                stmt = stmt.offset(offset).limit({{ underscore(table.business_name) }}.page_size)
+            if "criterian_meta" in g and g.criterian_meta.page:
+                g.criterian_meta.page.stmt = stmt
 
             result = db.session.execute(stmt).scalars().all()
             return [{{ table.class_name }}.model_validate(item) for item in result] if result else []
@@ -49,33 +48,6 @@ class {{ underscore(table.class_name) }}_mapper:
             print(f"查询{{ table.function_name }}列表出错: {e}")
             return []
 
-    @staticmethod
-    def select_{{ underscore(table.class_name) }}_count({{ underscore(table.business_name) }}: {{ table.class_name }}) -> int:
-        """
-        查询{{ table.function_name }}总数
-
-        Args:
-            {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
-
-        Returns:
-            int: {{ table.function_name }}总数
-        """
-        try:
-            stmt = select(func.count()).select_from({{ underscore(table.class_name) }}_po)
-{% for column in table.columns %}
-{% if column.is_query and column.query_type == 'EQ' %}
-            if {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }} is not None:
-                stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }} == {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }})
-{% elif column.is_query and column.query_type == 'LIKE' %}
-            if {{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}:
-                stmt = stmt.where({{ underscore(table.class_name) }}_po.{{ underscore(column.java_field) }}.like("%" + str({{ underscore(table.business_name) }}.{{ underscore(column.java_field) }}) + "%"))
-{% endif %}
-{% endfor %}
-            result = db.session.execute(stmt).scalar()
-            return result if result else 0
-        except Exception as e:
-            print(f"查询{{ table.function_name }}总数出错: {e}")
-            return 0
     {% if table.pk_column %}
     @staticmethod
     def select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.pk_column.java_field) }}: int) -> {{ table.class_name }}:

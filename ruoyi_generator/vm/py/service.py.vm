@@ -3,7 +3,7 @@
 # @FileName: {{ underscore(table.class_name) }}_service.py
 # @Time    : {{ datetime }}
 
-from typing import List, Tuple
+from typing import List
 
 from ruoyi_common.exception import ServiceException
 from ruoyi_common.utils.base import LogUtil
@@ -13,7 +13,7 @@ from {{ get_import_path(table.package_name, table.module_name, 'mapper') }}.{{ u
 class {{ underscore(table.class_name) }}_service:
     """{{ table.function_name }}服务类"""
 
-    def select_{{ underscore(table.class_name) }}_list(self, {{ underscore(table.business_name) }}: {{ table.class_name }}) -> Tuple[List[{{ table.class_name }}], int]:
+    def select_{{ underscore(table.class_name) }}_list(self, {{ underscore(table.business_name) }}: {{ table.class_name }}) -> List[{{ table.class_name }}]:
         """
         查询{{ table.function_name }}列表
 
@@ -21,11 +21,9 @@ class {{ underscore(table.class_name) }}_service:
             {{ underscore(table.business_name) }} ({{ table.class_name }}): {{ table.function_name }}对象
 
         Returns:
-            Tuple[List[{{ table.class_name }}], int]: {{ table.function_name }}列表和总数
+            List[{{ table.class_name }}]: {{ table.function_name }}列表
         """
-        list_result = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_list({{ underscore(table.business_name) }})
-        count_result = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_count({{ underscore(table.business_name) }})
-        return list_result, count_result
+        return {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_list({{ underscore(table.business_name) }})
 
     {% if table.pk_column %}
     def select_{{ underscore(table.class_name) }}_by_id(self, {{ underscore(table.pk_column.java_field) }}: int) -> {{ table.class_name }}:

@@ -1,6 +1,7 @@
 {%- set is_tree = table.tpl_category == 'tree' %}
 from typing import List
 
+from flask import g
 from flask_login import login_required
 from pydantic import BeforeValidator
 from typing_extensions import Annotated
@@ -23,6 +24,11 @@ gen = {{ underscore(table.class_name) }}_bp
 
 {{ underscore(table.class_name) }}_service = {{ underscore(table.class_name) }}_service_class()
 
+
+def _clear_page_context():
+    if hasattr(g, "criterian_meta"):
+        g.criterian_meta.page = None
+
 @gen.route('/list', methods=["GET"])
 {%- if is_tree %}
 @QueryValidator()
@@ -41,9 +47,10 @@ def {{ underscore(table.business_name) }}_list(dto: {{ table.class_name }}):
 {%- if is_tree %}
     {{ underscore(table.class_name) }}_entity.page_num = None
     {{ underscore(table.class_name) }}_entity.page_size = None
+    _clear_page_context()
 {%- endif %}
-    {{ underscore(table.business_name) }}s, total = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_list({{ underscore(table.class_name) }}_entity)
-    return TableResponse(code=HttpStatus.SUCCESS, msg='查询成功', rows={{ underscore(table.business_name) }}s, total=total)
+    {{ underscore(table.business_name) }}s = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_list({{ underscore(table.class_name) }}_entity)
+    return TableResponse(code=HttpStatus.SUCCESS, msg='查询成功', rows={{ underscore(table.business_name) }}s)
 
 {% if table.pk_column %}
 @gen.route('/<int:{{ underscore(table.pk_column.java_field) }}>', methods=['GET'])
@@ -122,7 +129,10 @@ def export_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     for attr in dto.model_fields.keys():
         if hasattr({{ underscore(table.class_name) }}_entity, attr):
             setattr({{ underscore(table.class_name) }}_entity, attr, getattr(dto, attr))
-    {{ underscore(table.business_name) }}s, total = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_list({{ underscore(table.class_name) }}_entity)
+    _clear_page_context()
+    {{ underscore(table.class_name) }}_entity.page_num = None
+    {{ underscore(table.class_name) }}_entity.page_size = None
+    {{ underscore(table.business_name) }}s = {{ underscore(table.class_name) }}_service.select_{{ underscore(table.class_name) }}_list({{ underscore(table.class_name) }}_entity)
     # 使用ExcelUtil导出Excel文件
     excel_util = ExcelUtil({{ table.class_name }})
     return excel_util.export_response({{ underscore(table.business_name) }}s, "{{ table.function_name }}数据")
