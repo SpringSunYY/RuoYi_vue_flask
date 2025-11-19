@@ -1,11 +1,18 @@
 {%- set is_tree = table.tpl_category == 'tree' %}
-from flask import request
+from typing import List
+
+from flask_login import login_required
+from pydantic import BeforeValidator
+from typing_extensions import Annotated
+from werkzeug.datastructures import FileStorage
 
 from ruoyi_common.base.model import AjaxResponse, TableResponse
 from ruoyi_common.constant import HttpStatus
-from ruoyi_common.descriptor.serializer import JsonSerializer
+from ruoyi_common.descriptor.serializer import BaseSerializer, JsonSerializer
 from ruoyi_common.descriptor.validator import QueryValidator, BodyValidator, PathValidator, FileDownloadValidator, FileUploadValidator
+from ruoyi_common.domain.enum import BusinessType
 from ruoyi_common.utils.base import ExcelUtil
+from ruoyi_framework.descriptor.log import Log
 from ruoyi_framework.descriptor.permission import HasPerm, PreAuthorize
 from {{ get_import_path(table.package_name, table.module_name, 'controller') }} import {{ underscore(table.class_name) }} as {{ underscore(table.class_name) }}_bp
 from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
@@ -52,6 +59,7 @@ def get_{{ underscore(table.business_name) }}({{ underscore(table.pk_column.java
 @gen.route('', methods=['POST'])
 @BodyValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:add'))
+@Log(title='{{ table.function_name }}管理', business_type=BusinessType.INSERT)
 @JsonSerializer()
 def add_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     """新增{{ table.function_name }}"""
@@ -69,6 +77,7 @@ def add_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
 @gen.route('', methods=['PUT'])
 @BodyValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:edit'))
+@Log(title='{{ table.function_name }}管理', business_type=BusinessType.UPDATE)
 @JsonSerializer()
 def update_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     """修改{{ table.function_name }}"""
@@ -87,6 +96,7 @@ def update_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
 @gen.route('/<ids>', methods=['DELETE'])
 @PathValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:remove'))
+@Log(title='{{ table.function_name }}管理', business_type=BusinessType.DELETE)
 @JsonSerializer()
 def delete_{{ underscore(table.business_name) }}(ids: str):
     """删除{{ table.function_name }}"""
@@ -103,6 +113,8 @@ def delete_{{ underscore(table.business_name) }}(ids: str):
 @gen.route('/export', methods=['POST'])
 @FileDownloadValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:export'))
+@Log(title='{{ table.function_name }}管理', business_type=BusinessType.EXPORT)
+@BaseSerializer()
 def export_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     """导出{{ table.function_name }}列表"""
     {{ underscore(table.class_name) }}_entity = {{ table.class_name }}()
@@ -116,33 +128,25 @@ def export_{{ underscore(table.business_name) }}(dto: {{ table.class_name }}):
     return excel_util.export_response({{ underscore(table.business_name) }}s, "{{ table.function_name }}数据")
 
 @gen.route('/importTemplate', methods=['POST'])
-@FileDownloadValidator()
-@PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:import'))
+@login_required
+@BaseSerializer()
 def import_template():
     """下载{{ table.function_name }}导入模板"""
     excel_util = ExcelUtil({{ table.class_name }})
-    return excel_util.import_template_response("{{ table.function_name }}导入模板")
+    return excel_util.import_template_response(sheetname="{{ table.function_name }}数据")
 
 @gen.route('/importData', methods=['POST'])
 @FileUploadValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:import'))
+@Log(title='{{ table.function_name }}管理', business_type=BusinessType.IMPORT)
 @JsonSerializer()
-def import_data():
+def import_data(
+    file: List[FileStorage],
+    update_support: Annotated[bool, BeforeValidator(lambda x: x != "0")]
+):
     """导入{{ table.function_name }}数据"""
-    file = request.files.get('file')
-    if not file:
-        return AjaxResponse.from_error(msg='上传文件不能为空')
-    
-    # 获取更新支持参数
-    update_support = request.form.get('updateSupport', '0') != '0'
-    
-    try:
-        # 使用ExcelUtil读取Excel文件
-        excel_util = ExcelUtil({{ table.class_name }})
-        {{ underscore(table.business_name) }}_list = excel_util.import_file(file, sheetname="{{ table.function_name }}数据")
-        
-        # 调用Service层处理导入逻辑
-        msg = {{ underscore(table.class_name) }}_service.import_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}_list, update_support)
-        return AjaxResponse.from_success(msg=msg)
-    except Exception as e:
-        return AjaxResponse.from_error(msg=f'导入失败: {str(e)}')
+    file = file[0]
+    excel_util = ExcelUtil({{ table.class_name }})
+    {{ underscore(table.business_name) }}_list = excel_util.import_file(file, sheetname="{{ table.function_name }}数据")
+    msg = {{ underscore(table.class_name) }}_service.import_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}_list, update_support)
+    return AjaxResponse.from_success(msg=msg)

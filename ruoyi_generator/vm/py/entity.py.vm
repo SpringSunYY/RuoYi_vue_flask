@@ -3,42 +3,79 @@
 # @FileName: {{ table.class_name }}.py
 # @Time    : {{ datetime }}
 
+{%- set flags = namespace(has_datetime=False, needs_str_to_int=False, has_query=False) %}
+{%- for column in table.columns %}
+{%- set col_type = (column.java_type or 'String')|lower %}
+{%- if col_type in ['date', 'datetime', 'timestamp'] %}
+{%- set flags.has_datetime = True %}
+{%- endif %}
+{%- if col_type in ['integer', 'int', 'long', 'short'] %}
+{%- set flags.needs_str_to_int = True %}
+{%- endif %}
+{%- if column.is_query == '1' %}
+{%- set flags.has_query = True %}
+{%- endif %}
+{%- endfor %}
+
 from typing import Optional, Annotated
+{%- if flags.has_datetime %}
 from datetime import datetime
-from pydantic import Field, BeforeValidator
+{%- endif %}
+from pydantic import Field{% if flags.has_datetime or flags.needs_str_to_int %}, BeforeValidator{% endif %}
 from ruoyi_common.base.model import BaseEntity
+{%- if flags.has_datetime and flags.needs_str_to_int %}
+from ruoyi_common.base.transformer import to_datetime, str_to_int
+{%- elif flags.has_datetime %}
 from ruoyi_common.base.transformer import to_datetime
-from ruoyi_common.base.schema_excel import ExcelAccess
+{%- elif flags.needs_str_to_int %}
+from ruoyi_common.base.transformer import str_to_int
+{%- endif %}
+from ruoyi_common.base.schema_excel import ExcelField
+{%- if flags.has_query %}
+from ruoyi_common.base.schema_vo import VoField
+{%- endif %}
+
 
 class {{ table.class_name }}(BaseEntity):
     """
     {{ table.table_comment }}对象
     """
 {%- for column in table.columns %}
-{%- set excel_name = (column.column_comment or column.java_field)|replace('"', '\\"') %}
-{%- if column.java_type == 'String' or column.java_type == 'str' %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[str] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
-{%- elif column.java_type == 'Integer' or column.java_type == 'int' %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[int] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
-{%- elif column.java_type == 'Long' %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[int] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
-{%- elif column.java_type == 'Float' or column.java_type == 'Double' %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[float] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
-{%- elif column.java_type == 'Boolean' or column.java_type == 'bool' %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[bool] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
-{%- elif column.java_type == 'Date' or column.java_type == 'DateTime' %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Annotated[Optional[datetime], BeforeValidator(to_datetime())] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
-{%- else %}
-    # {{ column.column_comment }}
-    {{ underscore(column.java_field) }}: Optional[str] = Field(default=None, description="{{ column.column_comment|replace('"','\\"') }}", json_schema_extra={"excel_access": ExcelAccess(name="{{ excel_name }}")})
+{%- set raw_comment = column.column_comment or column.java_field %}
+{%- set display_comment = raw_comment or column.java_field %}
+{%- set comment = (display_comment)|replace('"','\\"') %}
+{%- set excel_name = (raw_comment or column.java_field)|replace('"','\\"') %}
+{%- set attr_name = underscore(column.java_field) %}
+{%- set col_type = (column.java_type or 'String') %}
+{%- set col_type_lower = col_type|lower %}
+{%- set py_type = 'Optional[str]' %}
+{%- if col_type_lower in ['integer', 'int', 'long', 'short'] %}
+{%- set py_type = 'Optional[int]' %}
+{%- elif col_type_lower in ['float', 'double', 'bigdecimal', 'decimal'] %}
+{%- set py_type = 'Optional[float]' %}
+{%- elif col_type_lower in ['boolean', 'bool'] %}
+{%- set py_type = 'Optional[bool]' %}
+{%- elif col_type_lower in ['date', 'datetime', 'timestamp'] %}
+{%- set py_type = 'Optional[datetime]' %}
 {%- endif %}
+{%- set metadata = [] %}
+{%- if col_type_lower in ['integer', 'int', 'long', 'short'] %}
+{%- set _ = metadata.append('BeforeValidator(str_to_int)') %}
+{%- elif col_type_lower in ['date', 'datetime', 'timestamp'] %}
+{%- set _ = metadata.append('BeforeValidator(to_datetime())') %}
+{%- endif %}
+{%- set _ = metadata.append('Field(default=None, description="' ~ comment ~ '")') %}
+{%- if column.is_query == '1' %}
+{%- set _ = metadata.append('VoField(query=True)') %}
+{%- endif %}
+{%- set _ = metadata.append('ExcelField(name="' ~ excel_name ~ '")') %}
+    # {{ display_comment }}
+    {{ attr_name }}: Annotated[
+        {{ py_type }},
+        {{ metadata | join(',\n        ') }}
+    ]
 {%- endfor %}
+
     # 页码
     page_num: Optional[int] = Field(default=1, description="页码")
     # 每页数量

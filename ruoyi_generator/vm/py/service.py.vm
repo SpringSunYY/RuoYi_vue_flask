@@ -5,6 +5,8 @@
 
 from typing import List, Tuple
 
+from ruoyi_common.exception import ServiceException
+from ruoyi_common.utils.base import LogUtil
 from {{ get_import_path(table.package_name, table.module_name, 'domain') }} import {{ table.class_name }}
 from {{ get_import_path(table.package_name, table.module_name, 'mapper') }}.{{ underscore(table.class_name) }}_mapper import {{ underscore(table.class_name) }}_mapper
 
@@ -79,66 +81,62 @@ class {{ underscore(table.class_name) }}_service:
         return {{ underscore(table.class_name) }}_mapper.delete_{{ underscore(table.class_name) }}_by_ids(ids)
     {% endif %}
 
-    def import_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}_list: List[{{ table.class_name }}], update_support: bool = False) -> str:
+    def import_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}_list: List[{{ table.class_name }}], is_update: bool = False) -> str:
         """
         导入{{ table.function_name }}数据
 
         Args:
             {{ underscore(table.business_name) }}_list (List[{{ table.class_name }}]): {{ table.function_name }}列表
-            update_support (bool): 是否更新已存在的数据
+            is_update (bool): 是否更新已存在的数据
 
         Returns:
             str: 导入结果消息
         """
         if not {{ underscore(table.business_name) }}_list:
-            raise Exception("导入{{ table.function_name }}数据不能为空")
-        
+            raise ServiceException("导入{{ table.function_name }}数据不能为空")
+
         success_count = 0
-        failure_count = 0
-        failure_msg = []
-        
-        for index, {{ underscore(table.business_name) }} in enumerate({{ underscore(table.business_name) }}_list):
+        fail_count = 0
+        success_msg = ""
+        fail_msg = ""
+
+        for {{ underscore(table.business_name) }} in {{ underscore(table.business_name) }}_list:
             try:
+                display_value = {{ underscore(table.business_name) }}
                 {% if table.pk_column %}
-                # 检查是否已存在
-                existing = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.business_name) }}.{{ underscore(table.pk_column.java_field) }})
+                display_value = getattr({{ underscore(table.business_name) }}, "{{ underscore(table.pk_column.java_field) }}", display_value)
+                existing = None
+                if {{ underscore(table.business_name) }}.{{ underscore(table.pk_column.java_field) }} is not None:
+                    existing = {{ underscore(table.class_name) }}_mapper.select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.business_name) }}.{{ underscore(table.pk_column.java_field) }})
                 if existing:
-                    if update_support:
-                        # 更新数据
+                    if is_update:
                         result = {{ underscore(table.class_name) }}_mapper.update_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
-                        if result > 0:
-                            success_count += 1
-                        else:
-                            failure_count += 1
-                            failure_msg.append(f"第{index + 2}行更新失败")
                     else:
-                        failure_count += 1
-                        failure_msg.append(f"第{index + 2}行数据已存在")
+                        fail_count += 1
+                        fail_msg += f"<br/> 第{fail_count}条数据，已存在：{display_value}"
+                        continue
                 else:
-                    # 新增数据
                     result = {{ underscore(table.class_name) }}_mapper.insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
-                    if result > 0:
-                        success_count += 1
-                    else:
-                        failure_count += 1
-                        failure_msg.append(f"第{index + 2}行导入失败")
                 {% else %}
-                # 没有主键，直接插入
+                display_value = str(display_value)
                 result = {{ underscore(table.class_name) }}_mapper.insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
+                {% endif %}
                 if result > 0:
                     success_count += 1
+                    success_msg += f"<br/> 第{success_count}条数据，操作成功：{display_value}"
                 else:
-                    failure_count += 1
-                    failure_msg.append(f"第{index + 2}行导入失败")
-                {% endif %}
+                    fail_count += 1
+                    fail_msg += f"<br/> 第{fail_count}条数据，操作失败：{display_value}"
             except Exception as e:
-                failure_count += 1
-                failure_msg.append(f"第{index + 2}行导入失败: {str(e)}")
-        
-        if failure_count == 0:
-            return f'成功导入{success_count}条数据'
-        else:
-            error_msg = f'成功导入{success_count}条，失败{failure_count}条'
-            if failure_msg:
-                error_msg += f'。失败原因：{"; ".join(failure_msg[:5])}'
-            raise Exception(error_msg)
+                fail_count += 1
+                fail_msg += f"<br/> 第{fail_count}条数据，导入失败，原因：{e.__class__.__name__}"
+                LogUtil.logger.error(f"导入{{ table.function_name }}失败，原因：{e}")
+
+        if fail_count > 0:
+            if success_msg:
+                fail_msg = f"导入成功{success_count}条，失败{fail_count}条。{success_msg}<br/>" + fail_msg
+            else:
+                fail_msg = f"导入成功{success_count}条，失败{fail_count}条。{fail_msg}"
+            raise ServiceException(fail_msg)
+        success_msg = f"恭喜您，数据已全部导入成功！共 {success_count} 条，数据如下：" + success_msg
+        return success_msg

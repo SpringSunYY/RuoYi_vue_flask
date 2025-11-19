@@ -59,15 +59,6 @@ export function export{{ ApiName }}(query) {
   })
 }
 
-// 下载{{ table.function_name }}导入模板
-export function importTemplate() {
-  return request({
-    url: '/{{ table.module_name }}/{{ table.business_name }}/importTemplate',
-    method: 'post',
-    responseType: 'blob'
-  })
-}
-
 // 导入{{ table.function_name }}
 export function importData(data) {
   return request({

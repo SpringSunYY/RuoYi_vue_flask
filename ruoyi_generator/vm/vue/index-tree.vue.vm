@@ -331,7 +331,6 @@ import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 {%- set tree_code_field = to_camel_case(raw_tree_code, False) %}
 {%- set tree_parent_field = to_camel_case(raw_tree_parent, False) %}
 {%- set tree_name_field = to_camel_case(raw_tree_name, False) %}
-import { getFileName, getFilePath } from '@/utils/ruoyi'
 
 export default {
   name: "{{ table.class_name }}",

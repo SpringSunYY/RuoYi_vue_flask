@@ -283,7 +283,7 @@
         :limit="1"
         accept=".xlsx, .xls"
         :headers="upload.headers"
-        :action="upload.url"
+        :action="upload.url + '?updateSupport=' + upload.updateSupport"
         :disabled="upload.isUploading"
         :on-progress="handleFileUploadProgress"
         :on-success="handleFileSuccess"
@@ -311,9 +311,8 @@
 <script>
 {% set apiName = to_camel_case(table.class_name, False) %}
 {% set ApiName = capitalize_first(apiName) %}
-import { list{{ ApiName }}, get{{ ApiName }}, del{{ ApiName }}, add{{ ApiName }}, update{{ ApiName }}, export{{ ApiName }}, importTemplate, importData } from "@/api/{{ table.module_name }}/{{ table.business_name }}";
+import { list{{ ApiName }}, get{{ ApiName }}, del{{ ApiName }}, add{{ ApiName }}, update{{ ApiName }}, export{{ ApiName }}, importData } from "@/api/{{ table.module_name }}/{{ table.business_name }}";
 import { getToken } from "@/utils/auth";
-import { getFileName, getFilePath } from '@/utils/ruoyi'
 
 export default {
   name: "{{ table.class_name }}",
@@ -550,9 +549,11 @@ export default {
     },
     /** 下载模板操作 */
     importTemplate() {
-      importTemplate().then(response => {
-        this.$download.excel(response, '{{ table.function_name }}导入模板.xlsx');
-      });
+      this.download(
+        "{{ table.module_name }}/{{ table.business_name }}/importTemplate",
+        {},
+        "{{ table.business_name }}_template_" + new Date().getTime() + ".xlsx"
+      );
     },
     // 文件上传中处理
     handleFileUploadProgress(event, file, fileList) {

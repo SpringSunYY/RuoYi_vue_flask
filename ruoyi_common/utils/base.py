@@ -3,11 +3,12 @@
 
 from io import BufferedReader, BytesIO
 import io
+import json
 import os,socket,threading,re,base64,ipaddress,math,psutil
 from zipfile import is_zipfile
 import time
-from typing import Callable, List, Literal, Optional, Type, get_args, \
-    get_origin
+from typing import Any, Callable, Dict, List, Literal, Optional, Type, \
+    get_args, get_origin
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -1216,7 +1217,7 @@ class ExcelUtil:
         )
         self.render_header(sheet,header_fill)
 
-    def import_file(self, file:FileStorage, sheetname:str) -> List[BaseModel]:
+    def import_file(self, file:FileStorage, sheetname:Optional[str]=None) -> List[BaseModel]:
         """
         导入数据
 
@@ -1228,7 +1229,9 @@ class ExcelUtil:
             List[BaseModel]: 导入数据模型列表
         """
         self.check_file(file)
-        buffer = io.BufferedReader(file.stream)
+        # Read the file content into BytesIO buffer which is fully compatible with openpyxl
+        file.stream.seek(0)
+        buffer = BytesIO(file.stream.read())
         data = self.read_buffer(buffer, sheetname)
         return data
 
@@ -1249,33 +1252,182 @@ class ExcelUtil:
         if file.tell() > self.max_content_length:
             raise Exception("文件大小超过限制")
 
-    def read_buffer(self, buffer:BufferedReader,sheetname:str) -> List[BaseModel]:
+    IMPORT_SAMPLE_ROW_LIMIT = 5
+
+    def read_buffer(self, buffer, sheetname:Optional[str]=None) -> List[BaseModel]:
         """
         读取文件流
 
         Args:
-            buffer(BufferedReader): 导入文件流
+            buffer: 导入文件流 (can be BufferedReader or FileStorage stream)
             sheetname(str): 工作表名
 
         Returns:
             List[BaseModel]: 导入数据模型列表
         """
+        logger = self._get_logger()
         try:
             workbook = load_workbook(buffer,read_only=True,data_only=True)
         except Exception as e:
             raise Exception("文件格式不正确")
-        if sheetname not in workbook.sheetnames:
+        worksheets = self._get_candidate_worksheets(workbook, sheetname, logger)
+        if not worksheets:
             raise NotFound(description="工作表不存在")
-        worksheet = workbook[sheetname]
-        headers = worksheet[1]
+        failures = []
+        column_meta = self._build_excel_column_meta()
+        for worksheet in worksheets:
+            data, sample_rows = self._extract_rows_from_worksheet(
+                worksheet,
+                column_meta=column_meta
+            )
+            if data is not None:
+                if logger:
+                    logger.info(
+                        "Excel导入：选择工作表",
+                        extra={"sheet": worksheet.title, "sheetnames": workbook.sheetnames}
+                    )
+                return data
+            failures.append({
+                "sheet": worksheet.title,
+                "sample_rows": sample_rows
+            })
+            if logger:
+                logger.info(
+                    "Excel导入：工作表无有效表头，继续尝试下一张",
+                    extra={
+                        "sheet": worksheet.title,
+                        "sample_rows": json.dumps(sample_rows, ensure_ascii=False)
+                    }
+                )
+        if logger:
+            logger.error(
+                "Excel导入失败：所有工作表均缺少表头",
+                extra={
+                    "sheetnames": workbook.sheetnames,
+                    "failures": json.dumps(failures, ensure_ascii=False)
+                }
+            )
+        raise Exception("工作表为空，缺少表头行")
+
+    def _get_candidate_worksheets(self, workbook, sheetname:Optional[str], logger:Optional[Logger]) -> List[Worksheet]:
+        worksheets = list(workbook.worksheets)
+        if not worksheets:
+            return []
+        ordered = []
+        matched = None
+        if sheetname:
+            normalized_target = self._normalize_sheet_name(sheetname)
+            for worksheet in worksheets:
+                if self._normalize_sheet_name(worksheet.title) == normalized_target:
+                    matched = worksheet
+                    ordered.append(worksheet)
+                    break
+            if matched is None and logger:
+                logger.warning(
+                    "Excel导入提示：未找到指定工作表，将尝试所有工作表",
+                    extra={"expected": sheetname, "available": workbook.sheetnames}
+                )
+        for worksheet in worksheets:
+            if worksheet is matched:
+                continue
+            ordered.append(worksheet)
+        if logger:
+            logger.info(
+                "Excel导入：工作表尝试顺序",
+                extra={"order": [ws.title for ws in ordered]}
+            )
+        return ordered
+
+    def _extract_rows_from_worksheet(self, worksheet:Worksheet, column_meta:Dict[str,Dict[str,Any]]):
+        header_values = None
         data = []
-        for row in worksheet.iter_rows(min_row=2):
+        sample_rows = []
+        for row_index, row in enumerate(worksheet.iter_rows(min_row=1, values_only=True), start=1):
+            row_values = list(row)
+            if len(sample_rows) < self.IMPORT_SAMPLE_ROW_LIMIT:
+                sample_rows.append({
+                    "row": row_index,
+                    "values": self._stringify_row(row_values)
+                })
+            if header_values is None:
+                if not any(cell not in (None, "") for cell in row_values):
+                    continue
+                header_values = list(row_values)
+                continue
+            if not any(cell not in (None, "") for cell in row_values):
+                continue
             row_data = {}
-            for header, cell in zip(headers,row):
-                row_data[header.value] = cell.value
+            for header, cell_value in zip(header_values, row_values):
+                row_data[header] = self._coerce_cell_value(header, cell_value, column_meta)
             new_row = self.model.rebuild_excel_schema(row_data)
             data.append(self.model(**new_row))
-        return data
+        if header_values is None:
+            return None, sample_rows
+        return data, sample_rows
+
+    def _build_excel_column_meta(self) -> Dict[str,Dict[str,Any]]:
+        if hasattr(self, "_excel_column_meta_cache"):
+            return self._excel_column_meta_cache
+        column_meta = {}
+        for field_path, access in self.model.generate_excel_schema():
+            column_meta[access.name] = {
+                "path": field_path.split("."),
+                "access": access,
+                "target_type": None
+            }
+        self._excel_column_meta_cache = column_meta
+        return column_meta
+
+    def _coerce_cell_value(self, header:str, value:Any, column_meta:Dict[str,Dict[str,Any]]):
+        meta = column_meta.get(header)
+        if not meta:
+            return value
+        target_type = meta.get("target_type")
+        if target_type is None:
+            target_type = self._resolve_field_type(meta["path"])
+            meta["target_type"] = target_type
+        if target_type is str and value not in (None, ""):
+            return str(value)
+        return value
+
+    def _resolve_field_type(self, path:List[str]):
+        current_model = self.model
+        last_index = len(path) - 1
+        for idx, attr in enumerate(path):
+            if not hasattr(current_model, "model_fields"):
+                return None
+            field_info = current_model.model_fields.get(attr)
+            if field_info is None:
+                return None
+            if idx == last_index:
+                return get_final_type(field_info.annotation)
+            next_model = get_final_model(field_info.annotation)
+            if not next_model:
+                return None
+            current_model = next_model
+
+    @staticmethod
+    def _normalize_sheet_name(name:str) -> str:
+        return (name or "").strip().lower()
+
+    @classmethod
+    def _stringify_row(cls, row:List) -> List[str]:
+        normalized = []
+        for value in row:
+            if value is None:
+                normalized.append("")
+            elif isinstance(value, (int, float, bool, str)):
+                normalized.append(str(value))
+            else:
+                normalized.append(str(value))
+        return normalized
+
+    @staticmethod
+    def _get_logger() -> Optional[Logger]:
+        try:
+            return LogUtil.logger
+        except Exception:
+            return None
 
 
 class LogUtil:
