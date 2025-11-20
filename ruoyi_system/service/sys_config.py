@@ -140,9 +140,9 @@ class SysConfigService:
         for id in ids:
             config = cls.select_config_by_id(id)
             if not config:
-                return 
+                return
             if UserConstants.YES == config.config_type:
-                raise ServiceException(f"Built-in parameter【{config.config_key}】cannot be deleted")      
+                raise ServiceException(f"Built-in parameter【{config.config_key}】cannot be deleted")
             redis_cache.delete(cls.get_cache_key(config.config_key))
             deleting_ids.append(id)
         flag = SysConfigMapper.delete_configs_by_ids(deleting_ids)
@@ -207,7 +207,7 @@ class SysConfigService:
 def init(sender:Flask):
     '''
     初始化操作
-    
+
     Args:
         sender (Flask): 消息发送者
     '''

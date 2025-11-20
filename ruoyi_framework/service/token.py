@@ -6,6 +6,7 @@ from flask import Request, request
 
 from ruoyi_common.exception import ServiceException
 from ruoyi_common.utils import AddressUtil, IpUtil, TokenUtil
+from ruoyi_common.utils.base import UserAgentUtil
 from ruoyi_common.constant import Constants
 from ruoyi_common.domain.entity import LoginUser
 from ruoyi_framework.config import TokenConfig
@@ -72,11 +73,13 @@ class TokenService:
             user(LoginUser): 登录用户
         '''
         user.login_time = datetime.now()
-        user.expire_time = user.login_time + TokenConfig.expire_time()
+        expire_delta = TokenConfig.expire_time()
+        user.expire_time = user.login_time + expire_delta
+        expire_seconds = TokenConfig.expire_seconds()
         usertoken_key = cls.get_token_key(user.token.hex)
         user_json = user.model_dump_json()
         if redis_cache:
-            redis_cache.set(usertoken_key, user_json, TokenConfig.expire_time() * 60)
+            redis_cache.set(usertoken_key, user_json, ex=expire_seconds)
         
     @classmethod
     def set_useragent(cls, user:LoginUser):
@@ -86,10 +89,23 @@ class TokenService:
         Args:
             user(LoginUser): 登录用户
         '''
+        agent = request.user_agent
         user.ip_addr = IpUtil.get_ip()
         user.login_location = AddressUtil.get_address(user.ip_addr)
-        user.browser = request.user_agent.browser
-        user.os = request.user_agent.platform
+
+        browser = getattr(agent, "browser", None)
+        if not browser:
+            browser = UserAgentUtil.browser()
+        if not browser and agent:
+            browser = agent.string
+        user.browser = browser
+
+        platform = getattr(agent, "platform", None)
+        if not platform:
+            platform = UserAgentUtil.os()
+        if not platform and agent:
+            platform = agent.string
+        user.os = platform
     
     @classmethod
     def parse_token(cls, token:str) -> dict:

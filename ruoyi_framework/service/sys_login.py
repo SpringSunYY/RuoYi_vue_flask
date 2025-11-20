@@ -15,6 +15,7 @@ from ruoyi_framework.asyncsched.manager import TaskManager
 from ruoyi_framework.asyncsched.task import record_logininfor
 from ruoyi_system.domain.entity import SysLogininfor
 from ruoyi_system.service import SysConfigService,SysUserService
+from ruoyi_system.service.sys_post import SysPostService
 from ruoyi_admin.ext import lm,redis_cache
 from .token import TokenService
 from .sys_permission import SysPermissionService
@@ -86,6 +87,19 @@ class LoginService:
             raise ServiceException(f"对不起，您的账号：{user.user_name} 已删除")
         if user.status == UserStatus.DISABLE.value:
             raise ServiceException(f"对不起，您的账号：{user.user_name} 已停用")
+        if not user.role_ids:
+            dedup_role_ids = []
+            seen_role_ids = set()
+            for role in user.roles:
+                role_id = getattr(role, "role_id", None)
+                if role_id and role_id not in seen_role_ids:
+                    seen_role_ids.add(role_id)
+                    dedup_role_ids.append(role_id)
+            user.role_ids = dedup_role_ids
+        if not user.role_id and user.role_ids:
+            user.role_id = user.role_ids[0]
+        if not user.post_ids:
+            user.post_ids = SysPostService.select_post_list_by_user_id(user.user_id)
         login_user = LoginUser(
             user_id=user.user_id,
             dept_id=user.dept_id,

@@ -25,6 +25,16 @@ class TokenConfig:
         """
         return timedelta(minutes=int(cls._expire_time))
     
+    @classmethod
+    def expire_seconds(cls) -> int:
+        """
+        获取过期秒数
+
+        Returns:
+            int: 过期秒数
+        """
+        return int(cls.expire_time().total_seconds())
+    
 
 class ThreadPoolConfig:
     

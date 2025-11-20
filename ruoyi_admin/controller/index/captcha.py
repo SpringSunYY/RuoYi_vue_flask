@@ -22,15 +22,18 @@ def index_captcha_image():
     生成验证码图片
     :return:
     """
+    captchaOnOff = SysConfigService.select_captcha_on_off()
+    if not captchaOnOff:
+        return AjaxResponse.from_success()
     ImageCaptcha.character_rotate = (-15, 15)
     ImageCaptcha.character_warp_dx = (0.1, 0.1)
     ImageCaptcha.character_warp_dy = (0.1, 0.1)
     ImageCaptcha.word_offset_dx = 0.1
     ImageCaptcha.word_space_probability = 0
     image = ImageCaptcha(
-        width=160, 
-        height=60, 
-        font_sizes=[42,45,48]
+        width=160,
+        height=60,
+        font_sizes=[42, 45, 48]
     )
     wait_letters = string.ascii_letters + string.digits
     exclude_letters = "oO0iIl1"
@@ -38,8 +41,8 @@ def index_captcha_image():
     code = ''.join(random.sample(sample_letters, 4))
     uuid_str = uuid.uuid4().hex
     verifyKey = Constants.CAPTCHA_CODE_KEY + uuid_str
-    redis_cache.set(verifyKey, code, ex=Constants.CAPTCHA_EXPIRATION*60)
-    
+    redis_cache.set(verifyKey, code, ex=Constants.CAPTCHA_EXPIRATION * 60)
+
     byte_buffer = BytesIO()
     try:
         image.write(code, byte_buffer)
@@ -48,6 +51,6 @@ def index_captcha_image():
     byte_image = byte_buffer.getvalue()
     ajax_response = AjaxResponse.from_success()
     ajax_response.uuid = uuid_str
-    ajax_response.img = str(base64.b64encode(byte_image),encoding="utf-8")
-    ajax_response.captchaOnOff = SysConfigService.select_captcha_on_off()
+    ajax_response.img = str(base64.b64encode(byte_image), encoding="utf-8")
+    ajax_response.captchaOnOff = captchaOnOff
     return ajax_response
