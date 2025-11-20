@@ -9,6 +9,7 @@ from typing_extensions import Annotated
 from ruoyi_common.base.model import BaseEntity, AuditEntity
 from ruoyi_common.base.transformer import str_to_int, to_datetime
 from ruoyi_common.base.schema_vo import VoAccess
+from ruoyi_common.utils.base import DateUtil
 from ruoyi_apscheduler.constant import DATETIME_FORMAT
 
 
@@ -51,14 +52,14 @@ class SysJob(AuditEntity):
     # 创建时间
     create_time: Annotated[
         Optional[datetime],
-        BeforeValidator(to_datetime(DATETIME_FORMAT)),
+        BeforeValidator(to_datetime([DATETIME_FORMAT, DateUtil.YYYY_MM_DD_HH_MM_SS])),
         Field(default=None,vo=VoAccess(body=False))
     ]
     
     # 更新时间
     update_time: Annotated[
         Optional[datetime],
-        BeforeValidator(to_datetime(DATETIME_FORMAT)),
+        BeforeValidator(to_datetime([DATETIME_FORMAT, DateUtil.YYYY_MM_DD_HH_MM_SS])),
         Field(default=None,vo=VoAccess(body=False))
     ]
     
@@ -71,7 +72,8 @@ class SysJobLog(BaseEntity):
     
     job_log_id: Annotated[
         Optional[int],
-        BeforeValidator(str_to_int)
+        BeforeValidator(str_to_int),
+        Field(default=None)
     ]
     
     job_name: Annotated[

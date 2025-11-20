@@ -169,7 +169,12 @@ class SysJobService:
         job.status = ScheduleStatus.NORMAL.value
         num = SysJobMapper.update_job(job)
         if num > 0:
-            scheduler.pause_job(job.job_key)
+            sched_job = scheduler.get_job(job.job_key)
+            if not sched_job:
+                # APScheduler 中不存在该任务时重新创建
+                ScheduleUtil.create_schedule_job(scheduler, job)
+            else:
+                scheduler.resume_job(job.job_key)
         return num
     
     @classmethod
