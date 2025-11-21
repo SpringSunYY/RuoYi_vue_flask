@@ -19,10 +19,17 @@ class SysDictDataMapper:
     字典数据访问层
     """
     
+    # 默认查询字段（接口返回字段）
     default_fields = {
-        "dict_code", "dict_label", "dict_type", "dict_value", "is_default", 
-        "status", "css_class", "list_class", "create_by", "create_time", 
-        "update_by", "update_time"
+        "dict_code",
+        # 排序
+        "dict_sort",
+        "dict_label", "dict_type", "dict_value", "is_default",
+        "status", "css_class", "list_class",
+        # 审计字段
+        "create_by", "create_time", "update_by", "update_time",
+        # 备注
+        "remark",
     }
     
     default_columns = ColumnEntityList(SysDictDataPo, default_fields, False)

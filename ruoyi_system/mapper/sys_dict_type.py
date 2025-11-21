@@ -18,9 +18,13 @@ class SysDictTypeMapper:
     字典类型访问层
     """
     
+    # 默认查询字段（接口返回字段）
     default_fields = {
-        "dict_id", "dict_name", "dict_type", "status", "create_by", 
-        "create_time", "update_by", "update_time"
+        "dict_id", "dict_name", "dict_type", "status",
+        # 审计字段
+        "create_by", "create_time", "update_by", "update_time",
+        # 备注
+        "remark",
     }
     
     default_columns = ColumnEntityList(SysDictTypePo, default_fields, False)
