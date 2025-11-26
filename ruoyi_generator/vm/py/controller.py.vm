@@ -53,7 +53,7 @@ def {{ underscore(table.business_name) }}_list(dto: {{ table.class_name }}):
     return TableResponse(code=HttpStatus.SUCCESS, msg='查询成功', rows={{ underscore(table.business_name) }}s)
 
 {% if table.pk_column %}
-@gen.route('/<int:{{ underscore(table.pk_column.java_field) }}>', methods=['GET'])
+@gen.route('/<int:{{ table.pk_column.java_field }}>', methods=['GET'])
 @PathValidator()
 @PreAuthorize(HasPerm('{{ table.module_name }}:{{ table.business_name }}:query'))
 @JsonSerializer()
