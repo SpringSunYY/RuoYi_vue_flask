@@ -12,6 +12,8 @@ from werkzeug.exceptions import HTTPException, default_exceptions
 from werkzeug.http import http_date
 
 from ruoyi_common.base.model import AjaxResponse
+from ruoyi_common.constant import HttpStatus
+from ruoyi_common.utils.base import UtilException
 
 WSGIEnvironment: t.TypeAlias = dict[str, t.Any]
 
@@ -187,3 +189,21 @@ def handle_http_exception(error:HTTPException) -> Response:
     if not isinstance(error, HttpException):
         error = HttpException.from_http_exception(error)
     return error.get_response()
+
+
+def handle_util_exception(error:UtilException) -> Response:
+    """
+    处理业务工具类异常，保持和若依Java版一致的json结构
+    """
+    status = getattr(error, "status", HttpStatus.ERROR)
+    ajax_response = AjaxResponse.from_error(msg=str(error))
+    ajax_response.code = status
+    response = Response(
+        response=ajax_response.model_dump_json(
+            exclude_unset=True,
+            exclude_none=True,
+        ),
+        status=status,
+        mimetype="application/json"
+    )
+    return response
