@@ -1394,6 +1394,19 @@ class ExcelUtil:
         meta = column_meta.get(header)
         if not meta:
             return value
+        
+        access = meta.get("access")
+        # 如果设置了字典类型，将标签转换为字典值（导入时将标签转换为值）
+        if access and access.dict_type and value not in (None, ""):
+            try:
+                from ruoyi_system.service.sys_dict_type import DictCacheUtil
+                dict_value = DictCacheUtil.get_dict_value(access.dict_type, str(value))
+                if dict_value:
+                    value = dict_value
+            except Exception:
+                # 如果字典转换失败，使用原值
+                pass
+        
         target_type = meta.get("target_type")
         if target_type is None:
             target_type = self._resolve_field_type(meta["path"])

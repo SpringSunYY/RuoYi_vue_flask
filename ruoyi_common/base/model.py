@@ -251,6 +251,18 @@ class BaseEntity(BaseModel):
                     val = None
             else:
                 val = data.get(k)
+            
+            # 如果设置了字典类型，将字典值转换为标签（导出时显示标签）
+            if access.dict_type and val is not None:
+                try:
+                    from ruoyi_system.service.sys_dict_type import DictCacheUtil
+                    dict_label = DictCacheUtil.get_dict_label(access.dict_type, str(val))
+                    if dict_label:
+                        val = dict_label
+                except Exception:
+                    # 如果字典转换失败，使用原值
+                    pass
+            
             access.val = val
             yield k,access
     

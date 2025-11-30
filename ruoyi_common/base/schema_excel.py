@@ -22,7 +22,8 @@ def ExcelField(
     background_color:str='FFFFFFFF',
     color:str='FF000000',
     align:str='left',
-    action:Literal['import', 'export', 'both']='both'
+    action:Literal['import', 'export', 'both']='both',
+    dict_type:str=''
 ):
     excel_access = ExcelAccess(
         name=name,
@@ -39,7 +40,8 @@ def ExcelField(
         background_color=background_color,
         color=color,
         align=align,
-        action=action
+        action=action,
+        dict_type=dict_type
     )
     return Field(excel_access=excel_access)
 
