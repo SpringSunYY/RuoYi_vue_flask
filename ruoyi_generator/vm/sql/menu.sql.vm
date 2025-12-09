@@ -20,3 +20,6 @@ VALUES ('{{ table.function_name }}删除', @parentId, 4,  '#', '', 1, 0, 'F', '0
 
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
 VALUES ('{{ table.function_name }}导出', @parentId, 5,  '#', '', 1, 0, 'F', '0', '0', '{{ table.module_name }}:{{ table.business_name }}:export',       '#', 'admin', SYSDATE(), '', NULL, '');
+
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+VALUES ('{{ table.function_name }}导入', @parentId, 6,  '#', '', 1, 0, 'F', '0', '0', '{{ table.module_name }}:{{ table.business_name }}:import',       '#', 'admin', SYSDATE(), '', NULL, '');
