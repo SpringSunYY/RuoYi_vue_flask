@@ -1,13 +1,13 @@
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import ClassVar, Dict, Iterable, Set, Type
+
 from flask import g, request
 from pydantic import AliasChoices, AliasPath, BaseModel
 from werkzeug.datastructures import ImmutableMultiDict
-from werkzeug.exceptions import BadRequest,UnsupportedMediaType
+from werkzeug.exceptions import BadRequest, UnsupportedMediaType
 
-from ruoyi_common.base.model import BaseEntity, CriterianMeta, ExtraModel, \
+from ruoyi_common.base.model import CriterianMeta, ExtraModel, \
     BaseEntity, OrderModel, PageModel, VoValidatorContext
 from ruoyi_common.base.schema_vo import BaseSchemaFactory, QuerySchemaFactory
 
@@ -24,7 +24,7 @@ class AbsReqParser(ABC):
         """
 
     @abstractmethod
-    def cast_model(self, bo_model:BaseEntity) -> BaseModel:
+    def cast_model(self, bo_model: BaseEntity) -> BaseModel:
         """
         适配模型
 
@@ -37,7 +37,7 @@ class AbsReqParser(ABC):
         """
 
     @abstractmethod
-    def prepare_factory(self, factory:BaseSchemaFactory):
+    def prepare_factory(self, factory: BaseSchemaFactory):
         """
         准备工厂
 
@@ -51,15 +51,16 @@ class AbsReqParser(ABC):
         准备数据
         """
 
+
 class BaseReqParser(AbsReqParser):
 
     def data(self) -> Dict:
         pass
 
-    def cast_model(self, bo_model:BaseEntity) -> BaseModel:
+    def cast_model(self, bo_model: BaseEntity) -> BaseModel:
         pass
 
-    def prepare_factory(self, factory:BaseSchemaFactory):
+    def prepare_factory(self, factory: BaseSchemaFactory):
         pass
 
     def prepare(self):
@@ -68,7 +69,7 @@ class BaseReqParser(AbsReqParser):
 
 class QueryReqParser(BaseReqParser):
 
-    def __init__(self, context:VoValidatorContext):
+    def __init__(self, context: VoValidatorContext):
         self.context = context
         self.extra_model = ExtraModel
 
@@ -81,28 +82,38 @@ class QueryReqParser(BaseReqParser):
         g.criterian_meta = self.criterian_meta
 
     def validate_request(self) -> Dict:
-        return request.args.to_dict()
+        data = request.args.to_dict()
+        # 兼容前端传参形式 params[xxx]=yyy
+        params_dict = {}
+        for key, val in list(data.items()):
+            if key.startswith("params[") and key.endswith("]"):
+                inner = key[len("params["):-1]
+                params_dict[inner] = val
+                data.pop(key, None)
+        if params_dict:
+            data["params"] = params_dict
+        return data
 
     def data(self) -> Dict:
         data = self.validate_request().copy()
         if self.context.is_page:
-            page = PageModel.model_validate(data,context=self.context)
+            page = PageModel.model_validate(data, context=self.context)
             if page.model_fields_set:
                 self.criterian_meta.page = page
             self._remove_model_aliases(data, PageModel)
         if self.context.is_sort:
-            sort = OrderModel.model_validate(data,context=self.context)
+            sort = OrderModel.model_validate(data, context=self.context)
             if sort.model_fields_set:
                 self.criterian_meta.sort = sort
             self._remove_model_aliases(data, OrderModel)
         if self.extra_model:
-            extra = self.extra_model.model_validate(data,context=self.context)
+            extra = self.extra_model.model_validate(data, context=self.context)
             if extra.model_fields_set:
                 self.criterian_meta.extra = extra
             self._remove_model_aliases(data, self.extra_model)
         return data
 
-    def cast_model(self, bo_model:BaseEntity) -> BaseModel:
+    def cast_model(self, bo_model: BaseEntity) -> BaseModel:
         data = self.data()
         # 对于查询参数，只保留模型中定义的字段和别名，忽略额外字段
         # 收集模型中所有字段名和别名
@@ -177,10 +188,9 @@ class PathReqParser(BaseReqParser):
 
 @dataclass
 class BodyReqParser(BaseReqParser):
-
     minetype: ClassVar[str] = "application/json"
 
-    def __init__(self, context:VoValidatorContext):
+    def __init__(self, context: VoValidatorContext):
         self.context = context
 
     def validate_request(self) -> Dict:
@@ -202,7 +212,7 @@ class BodyReqParser(BaseReqParser):
         data = self.validate_request().copy()
         return data
 
-    def cast_model(self, bo_model:BaseEntity) -> BaseModel:
+    def cast_model(self, bo_model: BaseEntity) -> BaseModel:
         data = self.data()
         bo = bo_model.model_validate(data, context=self.context)
         return bo
@@ -210,21 +220,20 @@ class BodyReqParser(BaseReqParser):
 
 @dataclass
 class FormUrlencodedQueryReqParser(QueryReqParser):
-
     minetype: ClassVar[str] = "application/x-www-form-urlencoded"
 
-    def __init__(self, context:VoValidatorContext):
+    def __init__(self, context: VoValidatorContext):
         super().__init__(context)
 
     def validate_request(self) -> Dict:
         content_type = request.headers.get("Content-Type", "").lower()
         minetype = content_type.split(";")[0]
         if minetype == self.minetype:
-            form:ImmutableMultiDict = request.form
+            form: ImmutableMultiDict = request.form
             body = form.to_dict()
         else:
             raise UnsupportedMediaType(
-                description="除了{},content-type不支持{}".format(self.minetype,minetype)
+                description="除了{},content-type不支持{}".format(self.minetype, minetype)
             )
         return body
 
@@ -232,19 +241,18 @@ class FormUrlencodedQueryReqParser(QueryReqParser):
 @dataclass
 class DownloadFileQueryReqParser(FormUrlencodedQueryReqParser):
 
-    def __init__(self, context:VoValidatorContext):
+    def __init__(self, context: VoValidatorContext):
         super().__init__(context)
 
 
 class FormReqParser(BaseReqParser):
-
     minetype: ClassVar[str] = "multipart/form-data"
 
     def __init__(
             self,
-            is_form:bool=True,
-            is_query:bool=False,
-            is_file:bool|None=None,
+            is_form: bool = True,
+            is_query: bool = False,
+            is_file: bool | None = None,
     ):
         self.is_form = is_form
         self.is_query = is_query
@@ -263,7 +271,7 @@ class FormReqParser(BaseReqParser):
                 new_data.update(request.files.to_dict(flat=False))
         else:
             raise UnsupportedMediaType(
-                description="除了{},content-type不支持{}".format(self.minetype,minetype)
+                description="除了{},content-type不支持{}".format(self.minetype, minetype)
             )
         return new_data
 
@@ -283,7 +291,6 @@ class UploadFileFormReqParser(FormReqParser):
 
 
 class StreamReqParser(BaseReqParser):
-
     minetype: ClassVar[str] = "application/octet-stream"
 
     def data(self, *args, **kwargs) -> Dict:

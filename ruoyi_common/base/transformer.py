@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Author  : YY
-
 from types import NoneType
 from typing import Callable, List, Optional
 from datetime import datetime
@@ -10,7 +7,7 @@ from pydantic import BeforeValidator, ValidationInfo
 from ruoyi_common.utils.base import DateUtil
 
 
-def ids_to_list(value:str) -> Optional[List[int]]:
+def ids_to_list(value: str) -> Optional[List[int]]:
     """
     验证ids转换为字符串列表
 
@@ -31,7 +28,13 @@ def to_datetime(format=None) -> Callable[[str | NoneType, ValidationInfo], datet
         format (str): 日期格式. Defaults to '%Y-%m-%d %H:%M:%S'.
     """
     if format is None:
-        formats: List[str] = [DateUtil.YYYY_MM_DD_HH_MM_SS, DateUtil.YYYY_MM_DD]
+        # 默认支持常见的年月日格式，以及仅到月份的格式，方便 Excel 导入
+        formats: List[str] = [
+            DateUtil.YYYY_MM_DD_HH_MM_SS,
+            DateUtil.YYYY_MM_DD,
+            "%Y.%m",
+            "%Y-%m",
+        ]
     elif isinstance(format, (list, tuple, set)):
         formats = list(format)
     else:
@@ -63,10 +66,11 @@ def to_datetime(format=None) -> Callable[[str | NoneType, ValidationInfo], datet
                     continue
             raise ValueError(f"time data '{value}' does not match formats: {formats}")
         raise ValueError(f"Invalid datetime format: {value}")
+
     return validate_datetime
 
 
-def str_to_int(value:str|NoneType, info:ValidationInfo) \
+def str_to_int(value: str | NoneType, info: ValidationInfo) \
         -> int:
     """
     验证str是否为整数，并转换为整数
@@ -90,11 +94,29 @@ def str_to_int(value:str|NoneType, info:ValidationInfo) \
     return value
 
 
-def int_to_str(value:int|NoneType)-> str:
+def str_to_float(value: str | NoneType, info: ValidationInfo) -> float | NoneType:
+    """
+    将字符串转换为浮点数；空值直接返回
+    """
+    if value is None or value == "":
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        try:
+            return float(stripped)
+        except ValueError:
+            # 格式化不了就返回 None，避免抛出验证错误
+            return None
+    return value
+
+
+def int_to_str(value: int | NoneType) -> str:
     if isinstance(value, int):
         return str(value)
     else:
         return value
 
 
-ids_convertor = Annotated[List[int],BeforeValidator(ids_to_list)]
+ids_convertor = Annotated[List[int], BeforeValidator(ids_to_list)]
