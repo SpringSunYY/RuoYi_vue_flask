@@ -78,7 +78,7 @@ def add_{{ underscore(table.business_name) }}(dto: {{ class_name_pascal }}):
     result = {{ underscore(table.class_name) }}_service.insert_{{ underscore(table.class_name) }}({{ underscore(table.class_name) }}_entity)
     if result > 0:
         return AjaxResponse.from_success(msg='新增成功')
-    return AjaxResponse.from_error(code=HttpStatus.ERROR, msg='新增失败')
+    return AjaxResponse.from_error(msg='新增失败')
 
 {% if table.pk_column %}
 @gen.route('', methods=['PUT'])
@@ -96,7 +96,7 @@ def update_{{ underscore(table.business_name) }}(dto: {{ class_name_pascal }}):
     result = {{ underscore(table.class_name) }}_service.update_{{ underscore(table.class_name) }}({{ underscore(table.class_name) }}_entity)
     if result > 0:
         return AjaxResponse.from_success(msg='修改成功')
-    return AjaxResponse.from_error(code=HttpStatus.ERROR, msg='修改失败')
+    return AjaxResponse.from_error(msg='修改失败')
 {% endif %}
 
 {% if table.pk_column %}
