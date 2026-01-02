@@ -3,7 +3,7 @@
 # @FileName: {{ underscore(table.class_name) }}_service.py
 # @Time    : {{ datetime }}
 
-from typing import List
+from typing import List, Optional
 
 from ruoyi_common.exception import ServiceException
 from ruoyi_common.utils.base import LogUtil
@@ -12,8 +12,8 @@ from {{ get_import_path(table.package_name, table.module_name, 'mapper') }}.{{ u
 
 class {{ class_name_pascal }}Service:
     """{{ table.function_name }}服务类"""
-
-    def select_{{ underscore(table.class_name) }}_list(self, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> List[{{ class_name_pascal }}]:
+    @classmethod
+    def select_{{ underscore(table.class_name) }}_list(cls, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> List[{{ class_name_pascal }}]:
         """
         查询{{ table.function_name }}列表
 
@@ -26,7 +26,8 @@ class {{ class_name_pascal }}Service:
         return {{ class_name_pascal }}Mapper.select_{{ underscore(table.class_name) }}_list({{ underscore(table.business_name) }})
 
     {% if table.pk_column %}
-    def select_{{ underscore(table.class_name) }}_by_id(self, {{ underscore(table.pk_column.java_field) }}: int) -> {{ class_name_pascal }}:
+    @classmethod
+    def select_{{ underscore(table.class_name) }}_by_id(cls, {{ underscore(table.pk_column.java_field) }}: int) -> Optional[{{ class_name_pascal }}]:
         """
         根据ID查询{{ table.function_name }}
 
@@ -38,8 +39,8 @@ class {{ class_name_pascal }}Service:
         """
         return {{ class_name_pascal }}Mapper.select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.pk_column.java_field) }})
     {% endif %}
-
-    def insert_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
+    @classmethod
+    def insert_{{ underscore(table.class_name) }}(cls, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
         """
         新增{{ table.function_name }}
 
@@ -52,7 +53,8 @@ class {{ class_name_pascal }}Service:
         return {{ class_name_pascal }}Mapper.insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }})
 
     {% if table.pk_column %}
-    def update_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
+    @classmethod
+    def update_{{ underscore(table.class_name) }}(cls, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
         """
         修改{{ table.function_name }}
 
@@ -66,7 +68,8 @@ class {{ class_name_pascal }}Service:
     {% endif %}
 
     {% if table.pk_column %}
-    def delete_{{ underscore(table.class_name) }}_by_ids(self, ids: List[int]) -> int:
+    @classmethod
+    def delete_{{ underscore(table.class_name) }}_by_ids(cls, ids: List[int]) -> int:
         """
         批量删除{{ table.function_name }}
 
@@ -78,8 +81,8 @@ class {{ class_name_pascal }}Service:
         """
         return {{ class_name_pascal }}Mapper.delete_{{ underscore(table.class_name) }}_by_ids(ids)
     {% endif %}
-
-    def import_{{ underscore(table.class_name) }}(self, {{ underscore(table.business_name) }}_list: List[{{ class_name_pascal }}], is_update: bool = False) -> str:
+    @classmethod
+    def import_{{ underscore(table.class_name) }}(cls, {{ underscore(table.business_name) }}_list: List[{{ class_name_pascal }}], is_update: bool = False) -> str:
         """
         导入{{ table.function_name }}数据
 

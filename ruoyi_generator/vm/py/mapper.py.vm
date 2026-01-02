@@ -3,7 +3,7 @@
 # @FileName: {{ underscore(table.class_name) }}_mapper.py
 # @Time    : {{ datetime }}
 
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
 from flask import g
@@ -16,8 +16,8 @@ from {{ get_import_path(table.package_name, table.module_name, 'domain', table.c
 class {{ class_name_pascal }}Mapper:
     """{{ table.function_name }}Mapper"""
 
-    @staticmethod
-    def select_{{ underscore(table.class_name) }}_list({{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> List[{{ class_name_pascal }}]:
+    @classmethod
+    def select_{{ underscore(table.class_name) }}_list(cls, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> List[{{ class_name_pascal }}]:
         """
         查询{{ table.function_name }}列表
 
@@ -61,13 +61,9 @@ class {{ class_name_pascal }}Mapper:
             if begin_val is not None:
                 stmt = stmt.where({{ class_name_pascal }}Po.{{ field_name }} >= begin_val)
             if end_val is not None:
-                stmt = stmt.where({{ class_name_pascal }}Po.{{ field_name }} <= end_val)
-{%- endif %}
-{% endif %}
-{% endfor %}
+                stmt = stmt.where({{ class_name_pascal }}Po.{{ field_name }} <= end_val){%- endif %}{% endif %}{% endfor %}
             if "criterian_meta" in g and g.criterian_meta.page:
                 g.criterian_meta.page.stmt = stmt
-
             result = db.session.execute(stmt).scalars().all()
             return [{{ class_name_pascal }}.model_validate(item) for item in result] if result else []
         except Exception as e:
@@ -75,8 +71,8 @@ class {{ class_name_pascal }}Mapper:
             return []
 
     {% if table.pk_column %}
-    @staticmethod
-    def select_{{ underscore(table.class_name) }}_by_id({{ underscore(table.pk_column.java_field) }}: int) -> {{ class_name_pascal }}:
+    @classmethod
+    def select_{{ underscore(table.class_name) }}_by_id(cls, {{ underscore(table.pk_column.java_field) }}: int) -> Optional[{{ class_name_pascal }}]:
         """
         根据ID查询{{ table.function_name }}
 
@@ -94,8 +90,8 @@ class {{ class_name_pascal }}Mapper:
             return None
     {% endif %}
 
-    @staticmethod
-    def insert_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
+    @classmethod
+    def insert_{{ underscore(table.class_name) }}(cls, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
         """
         新增{{ table.function_name }}
 
@@ -128,8 +124,8 @@ class {{ class_name_pascal }}Mapper:
             return 0
 
     {% if table.pk_column %}
-    @staticmethod
-    def update_{{ underscore(table.class_name) }}({{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
+    @classmethod
+    def update_{{ underscore(table.class_name) }}(cls, {{ underscore(table.business_name) }}: {{ class_name_pascal }}) -> int:
         """
         修改{{ table.function_name }}
 
@@ -167,8 +163,8 @@ class {{ class_name_pascal }}Mapper:
             print(f"修改{{ table.function_name }}出错: {e}")
             return 0
 
-    @staticmethod
-    def delete_{{ underscore(table.class_name) }}_by_ids(ids: List[int]) -> int:
+    @classmethod
+    def delete_{{ underscore(table.class_name) }}_by_ids(cls, ids: List[int]) -> int:
         """
         批量删除{{ table.function_name }}
 
