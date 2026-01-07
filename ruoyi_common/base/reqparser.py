@@ -107,10 +107,16 @@ class QueryReqParser(BaseReqParser):
                 self.criterian_meta.sort = sort
             self._remove_model_aliases(data, OrderModel)
         if self.extra_model:
-            extra = self.extra_model.model_validate(data, context=self.context)
+            # 使用数据副本验证 ExtraModel，避免修改原始数据
+            extra_data_copy = data.copy()
+            extra = self.extra_model.model_validate(extra_data_copy, context=self.context)
             if extra.model_fields_set:
                 self.criterian_meta.extra = extra
-            self._remove_model_aliases(data, self.extra_model)
+                # 移除别名，但保留可能被主模型使用的通用别名
+                reserved_aliases = {'startTime', 'endTime', 'beginTime', 'pageNum', 'pageSize', 'orderByColumn', 'isAsc'}
+                for alias in self._collect_aliases(self.extra_model):
+                    if alias not in reserved_aliases:
+                        data.pop(alias, None)
         return data
 
     def cast_model(self, bo_model: BaseEntity) -> BaseModel:
@@ -124,14 +130,15 @@ class QueryReqParser(BaseReqParser):
             if hasattr(bo_model, 'model_config') and bo_model.model_config:
                 alias_gen = bo_model.model_config.get('alias_generator')
                 if callable(alias_gen):
-                    model_fields.add(alias_gen(name))
+                    alias = alias_gen(name)
+                    model_fields.add(alias)
             # 添加 validation_alias
             if info.validation_alias:
                 if isinstance(info.validation_alias, str):
                     model_fields.add(info.validation_alias)
                 elif hasattr(info.validation_alias, 'choices'):
                     model_fields.update(info.validation_alias.choices)
-        # 过滤掉未定义的字段
+        # 过滤掉未定义的字段，保持别名格式供模型验证
         filtered_data = {k: v for k, v in data.items() if k in model_fields}
         bo = bo_model.model_validate(filtered_data)
         return bo
