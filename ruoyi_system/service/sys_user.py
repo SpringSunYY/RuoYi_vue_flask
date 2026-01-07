@@ -244,6 +244,8 @@ class SysUserService:
         if user.create_time is None:
             user.create_time = datetime.now()
         flag = SysUserMapper.insert_user(user)
+        # 将生成的主键回写到实体，便于调用方获取用户ID
+        user.user_id = flag
         return flag > 0
 
     @classmethod
