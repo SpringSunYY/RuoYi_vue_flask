@@ -20,7 +20,6 @@ from ruoyi_system.domain.po import SysDeptPo, SysRoleDeptPo, SysUserPo
 
 
 class DataScopeEnum(Enum):
-
     ALL = "1"
 
     CUSTOM = "2"
@@ -38,28 +37,29 @@ class DataScope:
     数据权限范围
     """
     model_config = ConfigDict(
-        frozen = True,
-        extra = "forbid",
-        strict = True,
-        populate_by_name = True
+        frozen=True,
+        extra="forbid",
+        strict=True,
+        populate_by_name=True
     )
 
     # DATA_SCOPE: Literal["data_scope"] = Field(init=False, exclude=True, repr=False)
 
-    dept : bool = True
-    user : bool = False
-    user_field : str = "user_id"
-
+    dept: bool = True
+    user: bool = False
+    user_field: str = "user_id"
 
     def __call__(self, func) -> Any:
 
+        print(f"DataScope装饰器应用到函数: {func.__name__}")
         vsfunc = ValidatorScopeFunction(func)
+        print(f"ValidatorScopeFunction创建完成，unbound_model: {vsfunc.unbound_model}")
 
         @wraps(func)
         def wrapper(*args, **kwargs):
             unbound_model = vsfunc.unbound_model
             if unbound_model:
-                key,_ = unbound_model
+                key, _ = unbound_model
                 # 首先尝试从关键字参数获取
                 bo = kwargs.get(key)
                 if bo is None:
@@ -70,7 +70,10 @@ class DataScope:
                         if param_index < len(args):
                             bo = args[param_index]
                 self.handle_data_scope(bo)
+            else:
+                print("没有找到unbound_model")
             return vsfunc(*args, **kwargs)
+
         return wrapper
 
     def handle_data_scope(self, bo: BaseEntity):
@@ -80,10 +83,9 @@ class DataScope:
         Args:
             bo (BaseEntity): 校验对象
         """
-        login_user:LoginUser = SecurityUtil.get_login_user()
-        print(f"DataScope: 当前用户ID = {login_user.user_id if login_user else None}")
+        login_user: LoginUser = SecurityUtil.get_login_user()
         if login_user:
-            current_user:SysUser = login_user.user
+            current_user: SysUser = login_user.user
             # 检查用户是否为超级管理员（用户ID为1或者具有admin角色）
             if not SecurityUtil.is_admin(login_user.user_id) and not self.is_user_admin(current_user):
                 self.filter_data_scope(bo, current_user)
@@ -108,7 +110,7 @@ class DataScope:
             bo (BaseEntity): 校验对象
             user (SysUser): 当前用户
         """
-        criterian_meta:CriterianMeta = g.criterian_meta
+        criterian_meta: CriterianMeta = g.criterian_meta
         criterions = []
         for role in user.roles:
             if role.data_scope == DataScopeEnum.ALL.value:
@@ -188,19 +190,9 @@ class DataScope:
         bo_module = bo.__class__.__module__
         bo_class_name = bo.__class__.__name__
 
-        # PO 类映射规则
-        if bo_module == 'ruoyi_common.domain.entity':
-            # 系统实体 -> ruoyi_system.domain.po
-            po_module_path = 'ruoyi_system.domain.po'
-            po_class_name = bo_class_name + 'Po'
-        elif bo_module.startswith('ruoyi_movie.domain.entity'):
-            # 电影模块实体 -> ruoyi_movie.domain.po.*_po
-            po_module_path = bo_module.replace('.entity.', '.po.') + '_po'
-            po_class_name = bo_class_name + 'Po'
-        else:
-            # 其他模块，使用通用规则
-            po_module_path = bo_module.replace('.entity.', '.po.') + '_po'
-            po_class_name = bo_class_name + 'Po'
+        # 使用通用规则
+        po_module_path = bo_module.replace('.entity.', '.po.') + '_po'
+        po_class_name = bo_class_name + 'Po'
 
         try:
             # 动态导入 PO 模块

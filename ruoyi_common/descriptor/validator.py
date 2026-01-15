@@ -59,13 +59,17 @@ class ValidatorScopeFunction(AbcValidatorFunction):
         for key in self.sig.parameters:
             param = self.sig.parameters[key]
             self._validate_kind(param.kind)
-            if isinstance(param.annotation, BaseModel):
-                self._unbound_model = (key,param.annotation)
-                if index > 0:
-                    raise Exception(
-                        f"{self.func.__name__} 类型参数有且仅有第一个"
-                    )
+            if inspect.isclass(param.annotation) and issubclass(param.annotation, BaseModel):
+                # 检查是否是BaseEntity的子类（业务对象）
+                from ruoyi_common.base.model import BaseEntity
+                if issubclass(param.annotation, BaseEntity):
+                    self._unbound_model = (key,param.annotation)
+                    # 不限制只能是第一个参数，允许类方法中的业务对象参数
+                    break  # 找到第一个BaseEntity子类就停止
+                else:
+                    print(f"参数 {key} 不是 BaseEntity 子类")
             else:
+                print(f"参数 {key} 不是 BaseModel 子类")
                 self._unbound_fields[key] = \
                     FieldInfo.from_annotation(param.annotation)
             index += 1
