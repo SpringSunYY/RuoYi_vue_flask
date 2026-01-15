@@ -82,7 +82,7 @@ class PermissionService:
             user_authorities = login_user.permissions
             if not user_authorities: return False
         for permission in permissions.split(cls.PERMISSION_DELIMETER):
-            if permission.strip() in user_authorities:
+            if cls.ALL_PERMISSION or permission.strip() in user_authorities:
                 return True
         return False
 
@@ -197,7 +197,6 @@ class AnyPerm(AuthorityCaller):
     验证用户是否具备某权限列表中的任意一个权限
 
     """
-
     def __call__(self) -> bool:
         return PermissionService.any_perm(self._value)
 

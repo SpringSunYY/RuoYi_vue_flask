@@ -69,7 +69,6 @@ class ValidatorScopeFunction(AbcValidatorFunction):
                 else:
                     print(f"参数 {key} 不是 BaseEntity 子类")
             else:
-                print(f"参数 {key} 不是 BaseModel 子类")
                 self._unbound_fields[key] = \
                     FieldInfo.from_annotation(param.annotation)
             index += 1

@@ -51,9 +51,7 @@ class DataScope:
 
     def __call__(self, func) -> Any:
 
-        print(f"DataScope装饰器应用到函数: {func.__name__}")
         vsfunc = ValidatorScopeFunction(func)
-        print(f"ValidatorScopeFunction创建完成，unbound_model: {vsfunc.unbound_model}")
 
         @wraps(func)
         def wrapper(*args, **kwargs):
