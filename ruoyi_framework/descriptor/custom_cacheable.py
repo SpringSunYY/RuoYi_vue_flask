@@ -11,8 +11,8 @@ import hashlib
 import inspect
 import json
 import logging
-import pickle
-from typing import Any, Callable, Mapping, MutableMapping
+from datetime import datetime
+from typing import Any, Callable, List, Mapping, MutableMapping, Tuple
 
 from werkzeug.local import LocalProxy
 
@@ -25,17 +25,85 @@ DEFAULT_PAGE_NUM = 1
 COMMON_SEPARATOR = ":"
 ARGS_HASH_PREFIX = "args"
 
-__all__ = ["custom_cacheable"]
+
+def _default_json_serializable(obj: Any) -> Any:
+    """把任何返回值转成纯 JSON 可序列化（dict/list/原生类型）。"""
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [_default_json_serializable(v) for v in obj]
+    if hasattr(obj, "model_dump"):
+        return _default_json_serializable(obj.model_dump(mode="python"))
+    if hasattr(obj, "__dict__"):
+        result = {}
+        for k, v in vars(obj).items():
+            if not k.startswith("_"):
+                result[k] = _default_json_serializable(v)
+        return result
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    return str(obj)
+
+
+def _serialize_for_cache(result: Any, func: Callable) -> bytes:
+    """
+    将返回值序列化为 JSON bytes。优先用 Pydantic model_dump，否则用通用递归转换。
+    """
+    try:
+        # 有 model_dump 的对象（主要是 Pydantic）直接序列化，避免走到通用逻辑
+        if hasattr(result, "model_dump"):
+            data = result.model_dump(mode="python")
+        elif isinstance(result, (list, tuple)):
+            data = [
+                item.model_dump(mode="python") if hasattr(item, "model_dump") else _default_json_serializable(item)
+                for item in result
+            ]
+        else:
+            data = _default_json_serializable(result)
+        return json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
+    except Exception:
+        # 兜底：通用递归序列化
+        return json.dumps(_default_json_serializable(result), ensure_ascii=False, default=str).encode("utf-8")
+
+
+def _deserialize_cached(cached: bytes, func: Callable) -> Any:
+    """
+    从 Redis bytes 反序列化为 Python 对象。
+    利用函数返回类型注解自动重建 Pydantic 模型实例。
+    """
+    data = json.loads(cached.decode("utf-8"))
+    rt = func.__annotations__.get("return")
+
+    if rt is None:
+        return data
+
+    # 解析返回值类型
+    origin = getattr(rt, "__origin__", None)
+    if origin is list or origin is List:
+        # List[SomeType] → list of model instances
+        inner = getattr(rt, "__args__", (None,))[0]
+        if inner is not None and hasattr(inner, "model_validate"):
+            return [inner.model_validate(item) for item in data]
+        return data
+    elif origin is tuple or origin is Tuple:
+        inner = getattr(rt, "__args__", ())
+        return tuple(
+            m.model_validate(item) if hasattr(m, "model_validate") else item
+            for m, item in zip(inner, data)
+        )
+    elif hasattr(rt, "model_validate"):
+        return rt.model_validate(data)
+    return data
 
 
 def custom_cacheable(
-    key_prefix: str,
-    key_field: str | None = None,
-    use_query_params_as_key: bool = False,
-    expire_time: int = 300,
-    paginate: bool = False,
-    page_number_field: str = "page_num",
-    page_size_field: str = "page_size",
+        key_prefix: str,
+        key_field: str | None = None,
+        use_query_params_as_key: bool = False,
+        expire_time: int = 300,
+        paginate: bool = False,
+        page_number_field: str = "page_num",
+        page_size_field: str = "page_size",
 ) -> Callable:
     """
     Redis 缓存装饰器，参数含义与用户给出的 Java 版注解保持一致，便于迁移。
@@ -94,7 +162,7 @@ def custom_cacheable(
             cached = _safe_redis_get(client, cache_key)
             if cached is not None:
                 try:
-                    return pickle.loads(cached)
+                    return _deserialize_cached(cached, func)
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("反序列化缓存数据失败 %s: %s", cache_key, exc)
 
@@ -105,7 +173,7 @@ def custom_cacheable(
                 return result
 
             try:
-                payload = pickle.dumps(result)
+                payload = _serialize_for_cache(result, func)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("序列化缓存数据失败 %s: %s", cache_key, exc)
                 return result
@@ -226,7 +294,7 @@ def _dig_value(value: Any, attribute: str) -> Any:
 
 
 def _extract_int_value(
-    params: MutableMapping[str, Any], field_path: str | None, default_value: int
+        params: MutableMapping[str, Any], field_path: str | None, default_value: int
 ) -> int:
     """
     读取分页参数，自动完成类型转换及异常兜底。
@@ -241,4 +309,3 @@ def _extract_int_value(
         return int(raw_value)
     except (TypeError, ValueError):
         return default_value
-
